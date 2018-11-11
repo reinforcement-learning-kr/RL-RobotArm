@@ -42,7 +42,7 @@ Project period : **2018.10.27 ~ 2019.1.20**
 > - (1st month) At the same time, review each article (reinforcement learning or robotic arm control) weekly throgh Hangout.
 >  -We're here!
 - (2nd month) We will choose two papers to be implemented directly among the reviewed papers. -> already done.
-- (2nd month) Divide team to two sub-team, than implement two article each.
+- (2nd month) Divide team to two sub-team, then implement two article each.
 - (third month) Complete the implementation and write a tutorial.
   - Code implementation will work through github.
   - Documents will be shared in ppt or markdown format.
@@ -76,7 +76,8 @@ Project period : **2018.10.27 ~ 2019.1.20**
 --------------------------
 
 
-KR VER.
+KR Ver.
+
 ## 프로젝트 소개
 
 &nbsp;&nbsp;본 게시글은 **Reinforcement Learning Korea** 커뮤니티의 2회 프로젝트인 **각잡고 로봇팔** 을 소개하는 글입니다
@@ -85,7 +86,7 @@ KR VER.
 
 &nbsp;&nbsp;강화학습을 로봇 컨트롤에 적용함
 
-&nbsp;&nbsp;강화학습의 시작은 게임의 승리, discrete한 상황의 goal 달성을 목표로 한 task가 주를 이루었다. 하지만 PG(Policy Gradient)기법에 근간을 둔 연속적인 동작 제어에 관한 연구가 활발히 진행되고 있습니다. 특히, Open AI와 BAIR의 놀라운 연구성과를 토대로 강화학습을 로봇팔 제어에 적용하고자 합니다.
+&nbsp;&nbsp;강화학습의 시작은 게임의 승리 혹은 discrete한 상황의 goal 달성을 목표로 한 task가 주를 이루었습니다. 하지만 절대적인 승패가 존재하지 않는 일반적인 상황에서는 판단하기가 힘듭니다. 이를 극복하기 위해, 정책 자체를 근사화 하는 PG(Policy Gradient)가 고안되었습니다. 현재는 이 기법을 기본으로한 연속적인 동작 제어에 관한 연구가 활발히 진행되고 있습니다. 특히, 우리는 Open AI와 BAIR의 놀라운 연구성과를 토대로 로봇팔 제어에 강화학습을 적용하고자 합니다.
 
 &nbsp;&nbsp;현재는, 하기 2개의 논문의 알고리즘을 변형시켜 Pytorch로 구현 할 예정입니다.
 
@@ -117,7 +118,12 @@ KR VER.
 
 ## 프로젝트 현황
 
-&nbsp;&nbsp;현재 Mujuco 환경과, 두 가지의 논문으로 의견을 모아 논문을 리뷰중입니다.
+- 환경 선정 및 셋업 : [Mujuco](http://www.mujoco.org/)
+
+- 리뷰할 논문 선정
+
+- 현재 두 가지의 논문으로 의견을 모아 논문을 리뷰중입니다.
+
 
 ## 프로젝트 team
 
