@@ -67,7 +67,7 @@ Project period : **2018.10.27 ~ 2019.1.20**
 + [github](https://github.com/AshleyRyu) [facebook](https://www.facebook.com/profile.php?id=100001622442143)
   
 **JunHyeong, Jeon**
-+ [github](github.com/junhyeongjeon)
++ [github](https://github.com/junhyeongjeon) [facebook](https://www.facebook.com/Jsobu)
 
 **UiJin, Jung**
 + [github](https://github.com/jinPrelude) [facebook](https://www.facebook.com/profile.php?id=100011176712221&fref=gs&dti=1890180054554559&hc_location=group_dialog)
@@ -131,7 +131,7 @@ KR VER.
 + [github](https://github.com/AshleyRyu) [facebook](https://www.facebook.com/profile.php?id=100001622442143)
   
 **전준형**
-+ [github](github.com/junhyeongjeon)
++ [github](https://github.com/junhyeongjeon) [facebook](https://www.facebook.com/Jsobu)
 
 **정의진**
 + [github](https://github.com/jinPrelude) [facebook](https://www.facebook.com/profile.php?id=100011176712221&fref=gs&dti=1890180054554559&hc_location=group_dialog)
