@@ -17,9 +17,12 @@ def evaluate_policy(policy, eval_episodes=10):
 		obs = env.reset()
 		done = False
 		while not done:
+			
 			action = policy.select_action(np.array(obs))
 			obs, reward, done, _ = env.step(action)
+			#env.render()
 			avg_reward += reward
+			
 
 	avg_reward /= eval_episodes
 
@@ -120,6 +123,7 @@ if __name__ == "__main__":
 
 		# Perform action
 		new_obs, reward, done, _ = env.step(action) 
+		env.render()
 		done_bool = 0 if episode_timesteps + 1 == env._max_episode_steps else float(done)
 		episode_reward += reward
 
@@ -136,3 +140,4 @@ if __name__ == "__main__":
 	evaluations.append(evaluate_policy(policy))
 	if args.save_models: policy.save("%s" % (file_name), directory="./pytorch_models")
 	np.save("./results/%s" % (file_name), evaluations)  
+
