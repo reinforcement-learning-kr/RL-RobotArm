@@ -162,6 +162,7 @@ class RolloutWorker:
             #ag[...] = ag_new
 
             if done_new[0]:
+                print("done_new[0] : ", done_new[0])
                 episode_timesteps = 0
 
             if total_timestep % high_level_train_step == 0:
@@ -176,10 +177,13 @@ class RolloutWorker:
                 # self.low_replay_buffer.add((obs, new_obs, action, reward, done_bool))
                 self.high_replay_buffer.add((o[0], o_new[0], high_goal_gt_bar, reward, done_new[0]))
 
-                x, y, u, x_r, x_d = self.high_replay_buffer.sample(100)
+                #x, y, u, x_r, x_d = self.high_replay_buffer.sample(100)
 
-
-                self.policy.update_meta_controller(self.high_replay_buffer, episode_timesteps)
+                print("meta cont t : ", t)
+                print("meta cont total_timestep : ", total_timestep)
+                print("meta_cont episode_timesteps : ", int(total_timestep / 10))
+                print("meta cont high_goal_gt_bar : ", high_goal_gt_bar)
+                self.policy.update_meta_controller(self.high_replay_buffer, int(total_timestep/10))
 
                 high_old_obj_st = o_new
                 low_nn_at[:] = []
@@ -196,7 +200,11 @@ class RolloutWorker:
             joint_low_state_goal_new = np.concatenate([o_new, high_goal_gt], axis=None)
             self.low_replay_buffer.add((joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u[0], intrinsic_reward, done_new.copy()))
             #Update low layer
-            self.policy.update_controller(self.low_replay_buffer, episode_timesteps)
+            print("cont episode_timesteps : ", episode_timesteps)
+            print("cont t : ", t)
+            print("cont total_timestep : ", total_timestep)
+            print("u[0] : ", u[0])
+            self.policy.update_controller(self.low_replay_buffer, total_timestep)
 
             o[...] = o_new
             ag[...] = ag_new
