@@ -1,7 +1,9 @@
 from collections import deque
 
+from numpy import linalg as LA
 import numpy as np
 import pickle
+from baselines.hrl_td3.hrl_util import ReplayBuffer
 from mujoco_py import MujocoException
 
 from baselines.her.util import convert_episode_to_batch_major, store_args
@@ -42,6 +44,10 @@ class RolloutWorker:
         self.n_episodes = 0
         self.g = np.empty((self.rollout_batch_size, self.dims['g']), np.float32)  # goals
         self.initial_o = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)  # observations
+        #jangikim
+        self.low_replay_buffer = ReplayBuffer()
+        self.high_replay_buffer = ReplayBuffer()
+
         self.initial_ag = np.empty((self.rollout_batch_size, self.dims['g']), np.float32)  # achieved goals
         self.reset_all_rollouts()
         self.clear_history()
@@ -73,23 +79,42 @@ class RolloutWorker:
         o[:] = self.initial_o
         ag[:] = self.initial_ag
 
+        #jangikim
+        high_goal_gt = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
+        high_goal_gt_bar = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
+
+        high_old_obj_st = np.zeros((self.rollout_batch_size, self.dims['o']), np.float32)
+
         # generate episodes
         obs, achieved_goals, acts, goals, successes = [], [], [], [], []
         info_values = [np.empty((self.T, self.rollout_batch_size, self.dims['info_' + key]), np.float32) for key in self.info_keys]
         Qs = []
+
+        #jangikim
+        low_nn_at = []
+
+        ####################################################
+        high_level_train_step = 10 #jangikim
+        total_timestep = 1
+        episode_timesteps = 0
+
+
         for t in range(self.T):
-            policy_output = self.policy.get_actions(
-                o, ag, self.g,
+
+            policy_output = self.policy.get_low_actions(
+                #o, ag, self.g,
+                o, high_goal_gt,
                 compute_Q=self.compute_Q,
                 noise_eps=self.noise_eps if not self.exploit else 0.,
                 random_eps=self.random_eps if not self.exploit else 0.,
                 use_target_net=self.use_target_net)
 
-            if self.compute_Q:
-                u, Q = policy_output
-                Qs.append(Q)
-            else:
-                u = policy_output
+            #if self.compute_Q:
+            #    u, Q = policy_output
+            #    Qs.append(Q)
+            #else:
+            #    u = policy_output
+            u = policy_output
 
             if u.ndim == 1:
                 # The non-batched case should still have a reasonable shape.
@@ -98,21 +123,28 @@ class RolloutWorker:
             o_new = np.empty((self.rollout_batch_size, self.dims['o']))
             ag_new = np.empty((self.rollout_batch_size, self.dims['g']))
             success = np.zeros(self.rollout_batch_size)
+            #jangikim
+            reward_new = np.zeros(self.rollout_batch_size)
+            done_new = np.zeros(self.rollout_batch_size)
             # compute new states and observations
             for i in range(self.rollout_batch_size):
                 try:
                     # We fully ignore the reward here because it will have to be re-computed
                     # for HER.
-                    #curr_o_new, _, _, info = self.envs[i].step(u[i])
-                    curr_o_new, reward, done, info = self.envs[i].step(u[i]) #jangikim
+                    # curr_o_new, _, _, info = self.envs[i].step(u[i])
+                    curr_o_new, reward, done, info = self.envs[i].step(u[i])  # jangikim
                     if 'is_success' in info:
                         success[i] = info['is_success']
                     o_new[i] = curr_o_new['observation']
                     ag_new[i] = curr_o_new['achieved_goal']
+                    #jangikim
+                    reward_new[i] = reward
+                    done_new[i] = done
                     for idx, key in enumerate(self.info_keys):
                         info_values[idx][t, i] = info[key]
                     if self.render:
                         self.envs[i].render()
+
                 except MujocoException as e:
                     return self.generate_rollouts()
 
@@ -126,16 +158,59 @@ class RolloutWorker:
             successes.append(success.copy())
             acts.append(u.copy())
             goals.append(self.g.copy())
+            #o[...] = o_new
+            #ag[...] = ag_new
+
+            if done_new[0]:
+                episode_timesteps = 0
+
+            if total_timestep % high_level_train_step == 0:
+
+
+                #ret = self.meta_controller.select_action(joint_low_state_goal)
+                high_goal_gt = self.policy.get_high_goal_gt(o)
+
+                high_goal_gt_bar = self.policy.get_high_goal_gt_bar(high_old_obj_st, o_new, low_nn_at)
+
+                # Store data in replay buffer of high layer
+                # self.low_replay_buffer.add((obs, new_obs, action, reward, done_bool))
+                self.high_replay_buffer.add((o[0], o_new[0], high_goal_gt_bar, reward, done_new[0]))
+
+                x, y, u, x_r, x_d = self.high_replay_buffer.sample(100)
+
+
+                self.policy.update_meta_controller(self.high_replay_buffer, episode_timesteps)
+
+                high_old_obj_st = o_new
+                low_nn_at[:] = []
+
+            else:
+                high_goal_gt = o + high_goal_gt - o_new
+
+            low_nn_at.append(u.copy())
+
+            intrinsic_reward = -LA.norm(o + high_goal_gt - o_new)
+            # Store data in replay buffer of low layer
+            #self.low_replay_buffer.add((obs, new_obs, action, reward, done_bool))
+            joint_low_state_goal_old = np.concatenate([o, high_goal_gt], axis=None)
+            joint_low_state_goal_new = np.concatenate([o_new, high_goal_gt], axis=None)
+            self.low_replay_buffer.add((joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u[0], intrinsic_reward, done_new.copy()))
+            #Update low layer
+            self.policy.update_controller(self.low_replay_buffer, episode_timesteps)
+
             o[...] = o_new
             ag[...] = ag_new
+            total_timestep += 1
+            episode_timesteps += 1
+
         obs.append(o.copy())
         achieved_goals.append(ag.copy())
         self.initial_o[:] = o
 
         episode = dict(o=obs,
-                       u=acts,
-                       g=goals,
-                       ag=achieved_goals)
+                   u=acts,
+                   g=goals,
+                   ag=achieved_goals)
         for key, value in zip(self.info_keys, info_values):
             episode['info_{}'.format(key)] = value
 
@@ -144,11 +219,15 @@ class RolloutWorker:
         assert successful.shape == (self.rollout_batch_size,)
         success_rate = np.mean(successful)
         self.success_history.append(success_rate)
-        if self.compute_Q:
-            self.Q_history.append(np.mean(Qs))
+        #if self.compute_Q:
+        #    self.Q_history.append(np.mean(Qs))
         self.n_episodes += self.rollout_batch_size
 
+
         return convert_episode_to_batch_major(episode)
+
+
+
 
     def clear_history(self):
         """Clears all histories that are used for statistics

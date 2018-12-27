@@ -15,6 +15,8 @@ from baselines.her.util import mpi_fork
 
 from subprocess import CalledProcessError
 
+from schedule import LinearSchedule
+
 
 def mpi_average(value):
     if value == []:
@@ -173,7 +175,7 @@ def launch(
         logdir=logdir, policy=policy, rollout_worker=rollout_worker,
         evaluator=evaluator, n_epochs=n_epochs, n_test_rollouts=params['n_test_rollouts'],
         n_cycles=params['n_cycles'], n_batches=params['n_batches'],
-        policy_save_interval=policy_save_interval, save_policies=save_policies, demo_file=demo_file)
+        policy_save_interval=policy_save_interval, save_policies=save_policies, demo_file=demo_file, exploration_schedule = exploration_schedule)
 
 
 @click.command()

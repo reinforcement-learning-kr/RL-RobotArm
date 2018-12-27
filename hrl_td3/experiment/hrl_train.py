@@ -9,8 +9,9 @@ from mpi4py import MPI
 from baselines import logger
 from baselines.common import set_global_seeds
 from baselines.common.mpi_moments import mpi_moments
-import baselines.her.experiment.config as config
-from baselines.her.rollout import RolloutWorker
+import baselines.hrl_td3.experiment.hrl_config as config
+#from baselines.her.rollout import RolloutWorker
+from baselines.hrl_td3.hrl_rollout import RolloutWorker
 from baselines.her.util import mpi_fork
 
 from subprocess import CalledProcessError
@@ -43,9 +44,9 @@ def train(policy, rollout_worker, evaluator,
         for _ in range(n_cycles):
             episode = rollout_worker.generate_rollouts()
             policy.store_episode(episode)
-            for _ in range(n_batches):
-                policy.train()
-            policy.update_target_net()
+            #for _ in range(n_batches):
+            #    policy.train()
+            #policy.update_target_net()
 
         # test
         evaluator.clear_history()

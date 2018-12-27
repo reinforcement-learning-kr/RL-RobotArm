@@ -4,14 +4,65 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 #import utils
-
-from actor_critic_td3 import Actor, Critic
+from baselines.hrl_td3.hrl_util import ReplayBuffer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
 # Paper: https://arxiv.org/abs/1802.09477
+
+
+class Actor(nn.Module):
+    def __init__(self, state_dim, action_dim, max_action):
+        super(Actor, self).__init__()
+
+        self.l1 = nn.Linear(state_dim, 400)
+        self.l2 = nn.Linear(400, 300)
+        self.l3 = nn.Linear(300, action_dim)
+
+        self.max_action = max_action
+
+    def forward(self, x):
+        x = F.relu(self.l1(x))
+        x = F.relu(self.l2(x))
+        x = self.max_action * torch.tanh(self.l3(x))
+        return x
+
+
+class Critic(nn.Module):
+    def __init__(self, state_dim, action_dim):
+        super(Critic, self).__init__()
+
+        # Q1 architecture
+        self.l1 = nn.Linear(state_dim + action_dim, 400)
+        self.l2 = nn.Linear(400, 300)
+        self.l3 = nn.Linear(300, 1)
+
+        # Q2 architecture
+        self.l4 = nn.Linear(state_dim + action_dim, 400)
+        self.l5 = nn.Linear(400, 300)
+        self.l6 = nn.Linear(300, 1)
+
+    def forward(self, x, u):
+        xu = torch.cat([x, u], 1)
+
+        x1 = F.relu(self.l1(xu))
+        x1 = F.relu(self.l2(x1))
+        x1 = self.l3(x1)
+
+        x2 = F.relu(self.l4(xu))
+        x2 = F.relu(self.l5(x2))
+        x2 = self.l6(x2)
+        return x1, x2
+
+    def Q1(self, x, u):
+        xu = torch.cat([x, u], 1)
+
+        x1 = F.relu(self.l1(xu))
+        x1 = F.relu(self.l2(x1))
+        x1 = self.l3(x1)
+        return x1
 
 
 class TD3(object):
@@ -49,7 +100,6 @@ class TD3(object):
             noise = torch.FloatTensor(u).data.normal_(0, policy_noise).to(device)
             noise = noise.clamp(-noise_clip, noise_clip)
             next_action = (self.actor_target(next_state) + noise).clamp(-self.max_action, self.max_action)
-            next_action = next_action.clamp(-self.max_action, self.max_action)
 
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(next_state, next_action)

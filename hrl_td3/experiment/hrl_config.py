@@ -2,7 +2,7 @@ import numpy as np
 import gym
 
 from baselines import logger
-#from baselines.her.ddpg import DDPG
+from baselines.her.ddpg import DDPG
 from baselines.hrl_td3.hrl import hrlTD3
 from baselines.her.her import make_sample_her_transitions
 
@@ -31,7 +31,9 @@ DEFAULT_PARAMS = {
     'relative_goals': False,
     # training
     'n_cycles': 50,  # per epoch
-    'rollout_batch_size': 2,  # per mpi thread
+    #jangikim
+    #'rollout_batch_size': 2,  # per mpi thread
+    'rollout_batch_size': 1,  # per mpi thread
     'n_batches': 40,  # training batches per cycle
     'batch_size': 256,  # per mpi thread, measured in transitions and reduced to even multiple of chunk_length.
     'n_test_rollouts': 10,  # number of test rollouts per epoch, each consists of rollout_batch_size rollouts
@@ -52,6 +54,19 @@ DEFAULT_PARAMS = {
     'demo_batch_size': 128, #number of samples to be used from the demonstrations buffer, per mpi thread 128/1024 or 32/256
     'prm_loss_weight': 0.001, #Weight corresponding to the primary loss
     'aux_loss_weight':  0.0078, #Weight corresponding to the auxilliary loss also called the cloning loss
+    #hrl
+    'seed': 0,
+    'start_timesteps': 1e4,
+    'eval_freq': 5e3,
+    'max_timesteps': 1e6,
+    'expl_noise': 0.1,
+    'hrl_batch_size': 100,
+    'discount': 0.99,
+    'tau': 0.005,
+    'policy_noise': 0.2,
+    'noise_clip': 0.5,
+    'policy_freq': 2,
+
 }
 
 
@@ -94,7 +109,10 @@ def prepare_params(kwargs):
                  'polyak',
                  'batch_size', 'Q_lr', 'pi_lr',
                  'norm_eps', 'norm_clip', 'max_u',
-                 'action_l2', 'clip_obs', 'scope', 'relative_goals']:
+                 'action_l2', 'clip_obs', 'scope', 'relative_goals',
+                 'seed', 'start_timesteps', 'eval_freq', 'max_timesteps',
+                 'expl_noise', 'hrl_batch_size', 'discount', 'tau',
+                 'policy_noise', 'noise_clip', 'policy_freq']:
         ddpg_params[name] = kwargs[name]
         kwargs['_' + name] = kwargs[name]
         del kwargs[name]
@@ -166,6 +184,7 @@ def configure_ddpg(dims, params, reuse=False, use_mpi=True, clip_return=True):
     policy = DDPG(reuse=reuse, **ddpg_params, use_mpi=use_mpi)
     return policy
 '''
+
 def configure_hrl(dims, params, reuse=False, use_mpi=True, clip_return=True):
     sample_her_transitions = configure_her(params)
     # Extract relevant parameters.
@@ -196,14 +215,12 @@ def configure_hrl(dims, params, reuse=False, use_mpi=True, clip_return=True):
     ddpg_params['info'] = {
         'env_name': params['env_name'],
     }
+
     #policy = DDPG(reuse=reuse, **ddpg_params, use_mpi=use_mpi)
     #jangikim
-    policy = hrlTD3(
-        optimizer_spec=optimizer_spec,
-        replay_memory_size=REPLAY_MEMORY_SIZE,
-        batch_size=BATCH_SIZE,
-    )
+    policy = hrlTD3(reuse=reuse, **ddpg_params, use_mpi=use_mpi)
     return policy
+
 
 def configure_dims(params):
     env = cached_make_env(params['make_env'])
