@@ -92,12 +92,15 @@ class TD3(object):
             # Sample replay buffer
             x, y, u, r, d = replay_buffer.sample(batch_size)
             state = torch.FloatTensor(x).to(device)
+            '''
             print("it ", it)
-            print("x : ", x)
-            print("y : ", y)
-            print("u : ", u)
-            print("r : ", r)
-            print("d : ", d)
+            if iterations == 1:
+                print("x : ", x)
+                print("y : ", y)
+                print("u : ", u)
+                print("r : ", r)
+                print("d : ", d)
+            '''
             action = torch.FloatTensor(u).to(device)
             next_state = torch.FloatTensor(y).to(device)
             done = torch.FloatTensor(1 - d).to(device)

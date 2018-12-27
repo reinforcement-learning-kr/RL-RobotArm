@@ -302,7 +302,7 @@ class hrlTD3():
         for x in range(8):
             goals_candidate.append(np.random.randn(*ret.shape) + mu)
         goals_candidate.append(mu)
-        goals_candidate.append(ret)
+        goals_candidate.append([ret])
 
         L2_norm_sum = 0
         log_low_policy = []

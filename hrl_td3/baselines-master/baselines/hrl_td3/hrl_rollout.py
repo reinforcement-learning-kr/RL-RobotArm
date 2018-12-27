@@ -175,14 +175,32 @@ class RolloutWorker:
 
                 # Store data in replay buffer of high layer
                 # self.low_replay_buffer.add((obs, new_obs, action, reward, done_bool))
-                self.high_replay_buffer.add((o[0], o_new[0], high_goal_gt_bar, reward, done_new[0]))
+                self.high_replay_buffer.add((o[0], o_new[0], np.array(high_goal_gt_bar[0].copy()), reward, done_new[0]))
 
                 #x, y, u, x_r, x_d = self.high_replay_buffer.sample(100)
-
+                '''
                 print("meta cont t : ", t)
                 print("meta cont total_timestep : ", total_timestep)
                 print("meta_cont episode_timesteps : ", int(total_timestep / 10))
+
+                print("meta cont o[0] : ", o[0])
+                print("meta cont o_new[0] : ", o_new[0])
                 print("meta cont high_goal_gt_bar : ", high_goal_gt_bar)
+                print("meta cont high_goal_gt_bar[0] : ", high_goal_gt_bar[0])
+
+                print("meta cont reward : ", reward)
+                print("meta cont done_new[0] : ", done_new[0])
+
+
+                print("meta cont o[0]  type : ", type(o[0]))
+                print("meta cont o_new[0] type : ", type(o_new[0]))
+                print("meta cont high_goal_gt_bar type : ", type(high_goal_gt_bar))
+                print("meta cont high_goal_gt_bar[0] type : ", type(high_goal_gt_bar[0]))
+                print("meta cont reward type : ", type(reward))
+                print("meta cont done_new[0] type : ", type(done_new[0]))
+                '''
+
+
                 self.policy.update_meta_controller(self.high_replay_buffer, int(total_timestep/10))
 
                 high_old_obj_st = o_new
@@ -200,10 +218,12 @@ class RolloutWorker:
             joint_low_state_goal_new = np.concatenate([o_new, high_goal_gt], axis=None)
             self.low_replay_buffer.add((joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u[0], intrinsic_reward, done_new.copy()))
             #Update low layer
+            '''
             print("cont episode_timesteps : ", episode_timesteps)
             print("cont t : ", t)
             print("cont total_timestep : ", total_timestep)
-            print("u[0] : ", u[0])
+            '''
+            #print("u[0] : ", u[0])
             self.policy.update_controller(self.low_replay_buffer, total_timestep)
 
             o[...] = o_new
