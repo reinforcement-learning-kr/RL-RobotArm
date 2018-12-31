@@ -4,8 +4,11 @@ import numpy as np
 # https://github.com/openai/baselines/blob/master/baselines/deepq/replay_buffer.py
 
 # Expects tuples of (state, next_state, action, reward, done)
-class ReplayBuffer(object):
-	def __init__(self, max_size=1e6):
+
+class H_ReplayBuffer(object):
+	s = '200000'
+	#def __init__(self, max_size=1e6):
+	def __init__(self, max_size = int(s)):
 		self.storage = []
 		self.max_size = max_size
 		self.ptr = 0

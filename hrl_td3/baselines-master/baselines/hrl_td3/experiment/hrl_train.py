@@ -50,8 +50,8 @@ def train(policy, rollout_worker, evaluator,
 
         # test
         evaluator.clear_history()
-        for _ in range(n_test_rollouts):
-            evaluator.generate_rollouts()
+        #for _ in range(n_test_rollouts):
+        evaluator.generate_rollouts()
 
         # record logs
         logger.record_tabular('epoch', epoch)

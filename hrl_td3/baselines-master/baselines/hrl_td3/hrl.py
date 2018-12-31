@@ -7,8 +7,11 @@ from tensorflow.contrib.staging import StagingArea
 from baselines import logger
 from baselines.her.util import (
     import_function, store_args, flatten_grads, transitions_in_episode_batch, convert_episode_to_batch_major)
-from baselines.her.normalizer import Normalizer
-from baselines.her.replay_buffer import ReplayBuffer
+#from baselines.her.normalizer import Normalizer
+#from baselines.her.replay_buffer import ReplayBuffer
+from baselines.hrl_td3.normalizer import Normalizer
+from baselines.hrl_td3.replay_buffer import ReplayBuffer
+from baselines.hrl_td3.hrl_util import H_ReplayBuffer
 from baselines.common.mpi_adam import MpiAdam
 
 ########################### hrl ###########################
@@ -190,149 +193,16 @@ class hrlTD3():
         self.target_controller = Controller().type(dtype)self.dimo
         '''
         #self.meta_controller = TD3.TD3(state_dim, action_dim, max_action)
-        self.meta_controller = TD3(self.dimo, self.dimo, max_u)
+        #self.meta_controller = TD3(self.dimo, self.dimo, max_u)
+        self.meta_controller = TD3(self.dimo, self.dimo, self.clip_obs)
 
         #self.controller = TD3.TD3(state_dim, action_dim, max_action)
         self.controller = TD3(2*self.dimo, self.dimu, max_u)
 
         #self.meta_replay_memory = ReplayBuffer()
         #self.ctrl_replay_memory = ReplayBuffer()
-
-    def _random_action(self, n):
-        #return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n, self.dimu))
-        #return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n[0], self.dimu))
-        return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n[0]))
-
-    #def _preprocess_og(self, o, ag, g):
-    def _preprocess_og(self, o, g):
-        '''
-        if self.relative_goals:
-            g_shape = g.shape
-            g = g.reshape(-1, self.dimg)
-            ag = ag.reshape(-1, self.dimg)
-            g = self.subtract_goals(g, ag)
-            g = g.reshape(*g_shape)
-        '''
-        o = np.clip(o, -self.clip_obs, self.clip_obs)
-        g = np.clip(g, -self.clip_obs, self.clip_obs)
-        return o, g
-
-    #def get_low_actions(self, o, ag, g, noise_eps=0., random_eps=0., use_target_net=False,
-    def get_low_actions(self, o, g, noise_eps=0., random_eps=0., use_target_net=False,
-                    compute_Q=False):
-        #o, g = self._preprocess_og(o, ag, g)
-        o, g = self._preprocess_og(o, g)
-        #policy = self.target if use_target_net else self.main
-        # values to compute
-        '''
-        vals = [policy.pi_tf]
-        if compute_Q:
-            vals += [policy.Q_pi_tf]
-        # feed
-        feed = {
-            policy.o_tf: o.reshape(-1, self.dimo),
-            policy.g_tf: g.reshape(-1, self.dimg),
-            policy.u_tf: np.zeros((o.size // self.dimo, self.dimu), dtype=np.float32)
-        }
-        ret = self.sess.run(vals, feed_dict=feed)
-        '''
-        #jangikim
-        joint_low_state_goal = np.concatenate([o, g], axis=None)
-        #ret = self.meta_controller.select_action(joint_low_state_goal)
-        ret = self.controller.select_action(np.array(joint_low_state_goal))
-
-        # action postprocessing
-        #jangikim
-        #u = ret[0]
-        u = ret
-
-        noise = noise_eps * self.max_u * np.random.randn(*u.shape)  # gaussian noise
-        u += noise
-        u = np.clip(u, -self.max_u, self.max_u)
-        #u += np.random.binomial(1, random_eps, u.shape[0]).reshape(-1, 1) * (self._random_action(u.shape[0]) - u)  # eps-greedy
-        #u += np.random.binomial(1, random_eps, u.shape).reshape(-1, 1) * (self._random_action(u.shape) - u)  # eps-greedy
-        u1 = np.random.binomial(1, random_eps, u.shape)
-        u2 = (self._random_action(u.shape) - u)
-        u3 = u1 * u2
-        u += u3
-
-        '''
-        if u.shape[0] == 1:
-            u = u[0]
-        u = u.copy()
-        ret[0] = u
-
-        if len(ret) == 1:
-            return ret[0]
-        else:
-            return ret
-        '''
-
-        return u
-
-    def get_high_goal_gt (self, o):
-
-        return self.meta_controller.select_action(o)
-
-    def get_high_goal_gt_bar(self, o, o_new, low_nn_at):
-        o, g = self._preprocess_og(o, o)
-        #policy = self.target if use_target_net else self.main
-        # values to compute
-        '''
-        vals = [policy.pi_tf]
-        if compute_Q:
-            vals += [policy.Q_pi_tf]
-        # feed
-        feed = {
-            policy.o_tf: o.reshape(-1, self.dimo),
-            policy.g_tf: g.reshape(-1, self.dimg),
-            policy.u_tf: np.zeros((o.size // self.dimo, self.dimu), dtype=np.float32)
-        }
-        ret = self.sess.run(vals, feed_dict=feed)
-        '''
-        #jangikim
-        ret = self.meta_controller.select_action(o)
-
-        #gaussian_goals = np.empty((8, self.dims['o']), np.float32)
-        goals_candidate = []
-        # action postprocessing
-        #u = ret[0]
-        #noise = noise_eps * self.max_u * (np.random.randn(*u.shape) + (o_new - old_st)) # gaussian noise
-        mu = o_new - o
-        for x in range(8):
-            goals_candidate.append(np.random.randn(*ret.shape) + mu)
-        goals_candidate.append(mu)
-        goals_candidate.append([ret])
-
-        L2_norm_sum = 0
-        log_low_policy = []
-        for gi_bar in goals_candidate:
-            joint_low_state_goal = np.concatenate([o, gi_bar], axis=None)
-            low_ret = self.controller.select_action(np.array(joint_low_state_goal))
-
-            for ai in low_nn_at:
-                L2_norm = LA.norm(ai - low_ret)
-                L2_norm_sum += L2_norm*L2_norm
-
-            log_low_policy.append(-(L2_norm_sum / 2))
-            L2_norm_sum = 0
-
-        max_num = np.argmax(np.asarray(log_low_policy))
-        return goals_candidate[max_num]
-
-        #u += noise
-        #u = np.clip(u, -self.max_u, self.max_u)
-        #u += np.random.binomial(1, random_eps, u.shape[0]).reshape(-1, 1) * (self._random_action(u.shape[0]) - u)  # eps-greedy
-        #if u.shape[0] == 1:
-        #    u = u[0]
-        #u = u.copy()
-        #ret[0] = u
-
-        #if len(ret) == 1:
-        #    return ret[0]
-        #else:
-        #    return ret
-
+        self.low_replay_buffer = H_ReplayBuffer()
+        self.high_replay_buffer = H_ReplayBuffer()
 
 
 
@@ -386,35 +256,6 @@ class hrlTD3():
                 self.o_stats.recompute_stats()
                 self.g_stats.recompute_stats()
             episode.clear()
-
-    def store_episode(self, episode_batch, update_stats=True):
-        """
-        episode_batch: array of batch_size x (T or T+1) x dim_key
-                       'o' is of size T+1, others are of size T
-        """
-
-        self.buffer.store_episode(episode_batch)
-
-        if update_stats:
-            # add transitions to normalizer
-            '''
-            episode_batch['o_2'] = episode_batch['o'][:, 1:, :]
-            episode_batch['ag_2'] = episode_batch['ag'][:, 1:, :]
-            num_normalizing_transitions = transitions_in_episode_batch(episode_batch)
-            transitions = self.sample_transitions(episode_batch, num_normalizing_transitions)
-
-            o, o_2, g, ag = transitions['o'], transitions['o_2'], transitions['g'], transitions['ag']
-            transitions['o'], transitions['g'] = self._preprocess_og(o, ag, g)
-            # No need to preprocess the o_2 and g_2 since this is only used for stats
-            '''
-
-            #self.o_stats.update(transitions['o'])
-            #self.g_stats.update(transitions['g'])
-            self.o_stats.update(episode_batch['o'])
-            self.g_stats.update(episode_batch['g'])
-
-            self.o_stats.recompute_stats()
-            self.g_stats.recompute_stats()
 
     def get_current_buffer_size(self):
         return self.buffer.get_current_size()
@@ -490,6 +331,292 @@ class hrlTD3():
         res = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope + '/' + scope)
         return res
 
+    def __getstate__(self):
+        """Our policies can be loaded from pkl, but after unpickling you cannot continue training.
+        """
+        excluded_subnames = ['_tf', '_op', '_vars', '_adam', 'buffer', 'sess', '_stats',
+                             'main', 'target', 'lock', 'env', 'sample_transitions',
+                             'stage_shapes', 'create_actor_critic']
+
+        state = {k: v for k, v in self.__dict__.items() if all([not subname in k for subname in excluded_subnames])}
+        state['buffer_size'] = self.buffer_size
+        state['tf'] = self.sess.run([x for x in self._global_vars('') if 'buffer' not in x.name])
+        return state
+
+    def __setstate__(self, state):
+        if 'sample_transitions' not in state:
+            # We don't need this for playing the policy.
+            state['sample_transitions'] = None
+
+        self.__init__(**state)
+        # set up stats (they are overwritten in __init__)
+        for k, v in state.items():
+            if k[-6:] == '_stats':
+                self.__dict__[k] = v
+        # load TF variables
+        vars = [x for x in self._global_vars('') if 'buffer' not in x.name]
+        assert(len(vars) == len(state["tf"]))
+        node = [tf.assign(var, val) for var, val in zip(vars, state["tf"])]
+        self.sess.run(node)
+
+    ############### hrl ###################
+    def _random_action(self, n):
+        #return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n, self.dimu))
+        #return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n[0], self.dimu))
+        return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n[0]))
+
+
+    def _preprocess_og(self, o, ag, g):
+
+        if self.relative_goals:
+            g_shape = g.shape
+            g = g.reshape(-1, self.dimg)
+            ag = ag.reshape(-1, self.dimg)
+            g = self.subtract_goals(g, ag)
+            g = g.reshape(*g_shape)
+
+        o = np.clip(o, -self.clip_obs, self.clip_obs)
+        g = np.clip(g, -self.clip_obs, self.clip_obs)
+        return o, g
+
+    def get_low_actions(self, o, ag, g, noise_eps=0., random_eps=0., use_target_net=False,
+    #def get_low_actions(self, o, g, noise_eps=0., random_eps=0., use_target_net=False,
+                    compute_Q=False):
+        o, g = self._preprocess_og(o, ag, g)
+        #o, g = self._preprocess_og(o, g)
+        #policy = self.target if use_target_net else self.main
+        # values to compute
+        '''
+        vals = [policy.pi_tf]
+        if compute_Q:
+            vals += [policy.Q_pi_tf]
+        # feed
+        feed = {
+            policy.o_tf: o.reshape(-1, self.dimo),
+            policy.g_tf: g.reshape(-1, self.dimg),
+            policy.u_tf: np.zeros((o.size // self.dimo, self.dimu), dtype=np.float32)
+        }
+        ret = self.sess.run(vals, feed_dict=feed)
+        '''
+        #jangikim
+        #joint_low_state_goal = np.concatenate([o, g], axis=None)
+
+        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
+        t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(g))
+
+        n_o  = t_o.eval()
+        n_high_goal_gt = t_high_goal_gt.eval()
+
+        joint_low_state_goal = np.concatenate([n_o, n_high_goal_gt], axis=None)
+
+        #ret = self.meta_controller.select_action(joint_low_state_goal)
+        ret = self.controller.select_action(np.array(joint_low_state_goal))
+
+        # action postprocessing
+        #jangikim
+        #u = ret[0]
+        u = ret
+
+        noise = noise_eps * self.max_u * np.random.randn(*u.shape)  # gaussian noise
+        u += noise
+        u = np.clip(u, -self.max_u, self.max_u)
+        #u += np.random.binomial(1, random_eps, u.shape[0]).reshape(-1, 1) * (self._random_action(u.shape[0]) - u)  # eps-greedy
+        #u += np.random.binomial(1, random_eps, u.shape).reshape(-1, 1) * (self._random_action(u.shape) - u)  # eps-greedy
+        u1 = np.random.binomial(1, random_eps, u.shape)
+        u2 = (self._random_action(u.shape) - u)
+        u3 = u1 * u2
+        u += u3
+
+        '''
+        if u.shape[0] == 1:
+            u = u[0]
+        u = u.copy()
+        ret[0] = u
+
+        if len(ret) == 1:
+            return ret[0]
+        else:
+            return ret
+        '''
+
+        return u
+
+    def get_high_goal_gt (self, o, noise_eps=0., random_eps=0.,
+                          use_target_net=False, compute_Q=False):
+        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
+        n_o  = t_o.eval()
+
+        ret = self.meta_controller.select_action(n_o)
+
+        u = ret
+
+        noise = noise_eps * self.max_u * np.random.randn(*u.shape)  # gaussian noise
+        u += noise
+        u = np.clip(u, -self.max_u, self.max_u)
+        #u += np.random.binomial(1, random_eps, u.shape[0]).reshape(-1, 1) * (self._random_action(u.shape[0]) - u)  # eps-greedy
+        #u += np.random.binomial(1, random_eps, u.shape).reshape(-1, 1) * (self._random_action(u.shape) - u)  # eps-greedy
+        u1 = np.random.binomial(1, random_eps, u.shape)
+        u2 = (self._random_action(u.shape) - u)
+        u3 = u1 * u2
+        u += u3
+
+        return u
+
+    def get_high_goal_gt_bar(self, o, o_new, low_nn_at, ag):
+        o, g = self._preprocess_og(o, ag, o_new)
+        #policy = self.target if use_target_net else self.main
+        # values to compute
+        '''
+        vals = [policy.pi_tf]
+        if compute_Q:
+            vals += [policy.Q_pi_tf]
+        # feed
+        feed = {
+            policy.o_tf: o.reshape(-1, self.dimo),
+            policy.g_tf: g.reshape(-1, self.dimg),
+            policy.u_tf: np.zeros((o.size // self.dimo, self.dimu), dtype=np.float32)
+        }
+        ret = self.sess.run(vals, feed_dict=feed)
+        '''
+        #jangikim
+        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
+        n_o  = t_o.eval()
+
+        ret = self.meta_controller.select_action(n_o)
+
+        #gaussian_goals = np.empty((8, self.dims['o']), np.float32)
+        goals_candidate = []
+        # action postprocessing
+        #u = ret[0]
+        #noise = noise_eps * self.max_u * (np.random.randn(*u.shape) + (o_new - old_st)) # gaussian noise
+        mu = o_new - o
+        for x in range(8):
+            goals_candidate.append(np.random.randn(*ret.shape) + mu)
+        goals_candidate.append(mu)
+        goals_candidate.append([ret])
+
+        L2_norm_sum = 0
+        log_low_policy = []
+        for gi_bar in goals_candidate:
+            joint_low_state_goal = np.concatenate([o, gi_bar], axis=None)
+            low_ret = self.controller.select_action(np.array(joint_low_state_goal))
+
+            for ai in low_nn_at:
+                L2_norm = LA.norm(ai - low_ret)
+                L2_norm_sum += L2_norm*L2_norm
+
+            log_low_policy.append(-(L2_norm_sum / 2))
+            L2_norm_sum = 0
+
+        max_num = np.argmax(np.asarray(log_low_policy))
+        return goals_candidate[max_num]
+
+        #u += noise
+        #u = np.clip(u, -self.max_u, self.max_u)
+        #u += np.random.binomial(1, random_eps, u.shape[0]).reshape(-1, 1) * (self._random_action(u.shape[0]) - u)  # eps-greedy
+        #if u.shape[0] == 1:
+        #    u = u[0]
+        #u = u.copy()
+        #ret[0] = u
+
+        #if len(ret) == 1:
+        #    return ret[0]
+        #else:
+        #    return ret
+
+    def Get_Q_value(self, o, high_goal_gt, u):
+        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
+        t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt))
+
+        n_o  = t_o.eval()
+        n_high_goal_gt = t_high_goal_gt.eval()
+
+        joint_low_state_goal = np.concatenate([n_o, n_high_goal_gt], axis=None)
+        return self.controller.get_Q_value(np.array(joint_low_state_goal), u)
+
+    #def update_meta_controller(self, episode_timesteps, args, gamma=1.0):
+    def update_meta_controller(self, o, o_new, high_goal_gt_bar, r, d,  episode_timesteps):
+        #if len(self.meta_replay_memory) < self.batch_size:
+        #    return
+        #x, y, u, r, d = replay_buffer.sample(100)
+        t_n_o = self.o_stats.normalize(tf.convert_to_tensor(o))
+        t_n_o_new = self.o_stats.normalize(tf.convert_to_tensor(o_new))
+        t_n_high_goal_gt_bar = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt_bar))
+
+        n_o = t_n_o.eval()
+        n_o_new = t_n_o_new.eval()
+        n_high_goal_gt_bar = t_n_high_goal_gt_bar.eval()
+
+        self.high_replay_buffer.add((n_o, n_o_new, n_high_goal_gt_bar, r, d))
+
+        #jangikim
+        self.meta_controller.train(self.high_replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
+                     self.noise_clip, self.policy_freq)
+
+    #def update_controller(self, episode_timesteps, args, gamma=1.0):
+    def update_controller(self, o, o_new, high_goal_gt, u, r, d, episode_timesteps):
+        #if len(self.ctrl_replay_memory) < self.batch_size:
+        #    return
+        #x, y, u, r, d = replay_buffer.sample(1)
+        t_n_o = self.o_stats.normalize(tf.convert_to_tensor(o))
+        t_n_o_new = self.o_stats.normalize(tf.convert_to_tensor(o_new))
+        t_n_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt))
+
+        n_o = t_n_o.eval()
+        n_o_new = t_n_o_new.eval()
+        n_high_goal_gt = t_n_high_goal_gt.eval()
+
+        joint_low_state_goal_old = np.concatenate([n_o, n_high_goal_gt], axis=None)
+        joint_low_state_goal_new = np.concatenate([n_o_new, n_high_goal_gt], axis=None)
+        self.low_replay_buffer.add(
+            (joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u, r, d))
+
+        self.controller.train(self.low_replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
+                     self.noise_clip, self.policy_freq)
+
+    def store_episode(self, episode_batch, update_stats=True):
+        """
+        episode_batch: array of batch_size x (T or T+1) x dim_key
+                       'o' is of size T+1, others are of size T
+        """
+
+        self.buffer.store_episode(episode_batch)
+
+        if update_stats:
+            # add transitions to normalizer
+            '''
+            episode_batch['o_2'] = episode_batch['o'][:, 1:, :]
+            episode_batch['ag_2'] = episode_batch['ag'][:, 1:, :]
+            num_normalizing_transitions = transitions_in_episode_batch(episode_batch)
+            transitions = self.sample_transitions(episode_batch, num_normalizing_transitions)
+
+            o, o_2, g, ag = transitions['o'], transitions['o_2'], transitions['g'], transitions['ag']
+            transitions['o'], transitions['g'] = self._preprocess_og(o, ag, g)
+            # No need to preprocess the o_2 and g_2 since this is only used for stats
+            '''
+
+            #self.o_stats.update(transitions['o'])
+            #self.g_stats.update(transitions['g'])
+            #jangikim
+            po, pg = self._preprocess_og(episode_batch['o'], episode_batch['ag'], episode_batch['g'])
+            self.o_stats.update(po)
+            self.g_stats.update(pg)
+
+            self.o_stats.recompute_stats()
+            self.g_stats.recompute_stats()
+
+    def logs(self, prefix=''):
+        logs = []
+        logs += [('stats_o/mean', np.mean(self.sess.run([self.o_stats.mean])))]
+        logs += [('stats_o/std', np.mean(self.sess.run([self.o_stats.std])))]
+        logs += [('stats_g/mean', np.mean(self.sess.run([self.g_stats.mean])))]
+        logs += [('stats_g/std', np.mean(self.sess.run([self.g_stats.std])))]
+
+        if prefix is not '' and not prefix.endswith('/'):
+            return [(prefix + '/' + key, val) for key, val in logs]
+        else:
+            return logs
+
     def _create_network(self, reuse=False):
         logger.info("Creating a DDPG agent with action space %d x %s..." % (self.dimu, self.max_u))
 
@@ -507,6 +634,7 @@ class hrlTD3():
                 vs.reuse_variables()
             self.g_stats = Normalizer(self.dimg, self.norm_eps, self.norm_clip, sess=self.sess)
 
+        '''
         # mini-batch sampling.
         batch = self.staging_tf.get()
         batch_tf = OrderedDict([(key, batch[i])
@@ -569,138 +697,17 @@ class hrlTD3():
         # optimizers
         self.Q_adam = MpiAdam(self._vars('main/Q'), scale_grad_by_procs=False)
         self.pi_adam = MpiAdam(self._vars('main/pi'), scale_grad_by_procs=False)
-
+        '''
         # polyak averaging
-        self.main_vars = self._vars('main/Q') + self._vars('main/pi')
-        self.target_vars = self._vars('target/Q') + self._vars('target/pi')
+        #self.main_vars = self._vars('main/Q') + self._vars('main/pi')
+        #self.target_vars = self._vars('target/Q') + self._vars('target/pi')
         self.stats_vars = self._global_vars('o_stats') + self._global_vars('g_stats')
-        self.init_target_net_op = list(
-            map(lambda v: v[0].assign(v[1]), zip(self.target_vars, self.main_vars)))
-        self.update_target_net_op = list(
-            map(lambda v: v[0].assign(self.polyak * v[0] + (1. - self.polyak) * v[1]), zip(self.target_vars, self.main_vars)))
+        #self.init_target_net_op = list(
+        #    map(lambda v: v[0].assign(v[1]), zip(self.target_vars, self.main_vars)))
+        #self.update_target_net_op = list(
+        #    map(lambda v: v[0].assign(self.polyak * v[0] + (1. - self.polyak) * v[1]), zip(self.target_vars, self.main_vars)))
 
         # initialize all variables
         tf.variables_initializer(self._global_vars('')).run()
-        self._sync_optimizers()
-        self._init_target_net()
-
-    def logs(self, prefix=''):
-        logs = []
-        logs += [('stats_o/mean', np.mean(self.sess.run([self.o_stats.mean])))]
-        logs += [('stats_o/std', np.mean(self.sess.run([self.o_stats.std])))]
-        logs += [('stats_g/mean', np.mean(self.sess.run([self.g_stats.mean])))]
-        logs += [('stats_g/std', np.mean(self.sess.run([self.g_stats.std])))]
-
-        if prefix is not '' and not prefix.endswith('/'):
-            return [(prefix + '/' + key, val) for key, val in logs]
-        else:
-            return logs
-
-    def __getstate__(self):
-        """Our policies can be loaded from pkl, but after unpickling you cannot continue training.
-        """
-        excluded_subnames = ['_tf', '_op', '_vars', '_adam', 'buffer', 'sess', '_stats',
-                             'main', 'target', 'lock', 'env', 'sample_transitions',
-                             'stage_shapes', 'create_actor_critic']
-
-        state = {k: v for k, v in self.__dict__.items() if all([not subname in k for subname in excluded_subnames])}
-        state['buffer_size'] = self.buffer_size
-        state['tf'] = self.sess.run([x for x in self._global_vars('') if 'buffer' not in x.name])
-        return state
-
-    def __setstate__(self, state):
-        if 'sample_transitions' not in state:
-            # We don't need this for playing the policy.
-            state['sample_transitions'] = None
-
-        self.__init__(**state)
-        # set up stats (they are overwritten in __init__)
-        for k, v in state.items():
-            if k[-6:] == '_stats':
-                self.__dict__[k] = v
-        # load TF variables
-        vars = [x for x in self._global_vars('') if 'buffer' not in x.name]
-        assert(len(vars) == len(state["tf"]))
-        node = [tf.assign(var, val) for var, val in zip(vars, state["tf"])]
-        self.sess.run(node)
-
-    ############### hrl ###################
-
-
-    #def update_meta_controller(self, episode_timesteps, args, gamma=1.0):
-    def update_meta_controller(self, replay_buffer, episode_timesteps):
-        #if len(self.meta_replay_memory) < self.batch_size:
-        #    return
-        #jangikim
-        self.meta_controller.train(replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
-                     self.noise_clip, self.policy_freq)
-
-        '''
-        state_batch, goal_batch, next_state_batch, ex_reward_batch, done_mask = \
-            self.meta_replay_memory.sample(self.batch_size)
-        state_batch = Variable(torch.from_numpy(state_batch).type(dtype))
-        goal_batch = Variable(torch.from_numpy(goal_batch).long())
-        next_state_batch = Variable(torch.from_numpy(next_state_batch).type(dtype))
-        ex_reward_batch = Variable(torch.from_numpy(ex_reward_batch).type(dtype))
-        not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype)
-        if USE_CUDA:
-            goal_batch = goal_batch.cuda()
-        # Compute current Q value, meta_controller takes only state and output value for every state-goal pair
-        # We choose Q based on goal chosen.
-        current_Q_values = self.meta_controller(state_batch).gather(1, goal_batch.unsqueeze(1))
-        # Compute next Q value based on which goal gives max Q values
-        # Detach variable from the current graph since we don't want gradients for next Q to propagated
-        next_max_q = self.target_meta_controller(next_state_batch).detach().max(1)[0]
-        next_Q_values = not_done_mask * next_max_q
-        # Compute the target of the current Q values
-        target_Q_values = ex_reward_batch + (gamma * next_Q_values)
-        current_Q_values = current_Q_values.view(len(current_Q_values)) #jangikim
-        # Compute Bellman error (using Huber loss)
-        loss = F.smooth_l1_loss(current_Q_values, target_Q_values)
-        # Copy Q to target Q before updating parameters of Q
-        self.target_meta_controller.load_state_dict(self.meta_controller.state_dict())
-        # Optimize the model
-        self.meta_optimizer.zero_grad()
-        loss.backward()
-        for param in self.meta_controller.parameters():
-            param.grad.data.clamp_(-1, 1)
-        self.meta_optimizer.step()
-        '''
-
-    #def update_controller(self, episode_timesteps, args, gamma=1.0):
-    def update_controller(self, replay_buffer, episode_timesteps):
-        #if len(self.ctrl_replay_memory) < self.batch_size:
-        #    return
-        self.controller.train(replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
-                     self.noise_clip, self.policy_freq)
-        '''
-        state_goal_batch, action_batch, next_state_goal_batch, in_reward_batch, done_mask = \
-            self.ctrl_replay_memory.sample(self.batch_size)
-        state_goal_batch = Variable(torch.from_numpy(state_goal_batch).type(dtype))
-        action_batch = Variable(torch.from_numpy(action_batch).long())
-        next_state_goal_batch = Variable(torch.from_numpy(next_state_goal_batch).type(dtype))
-        in_reward_batch = Variable(torch.from_numpy(in_reward_batch).type(dtype))
-        not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype)
-        if USE_CUDA:
-            action_batch = action_batch.cuda()
-        # Compute current Q value, controller takes only (state, goal) and output value for every (state, goal)-action pair
-        # We choose Q based on action taken.
-        current_Q_values = self.controller(state_goal_batch).gather(1, action_batch.unsqueeze(1))
-        # Compute next Q value based on which goal gives max Q values
-        # Detach variable from the current graph since we don't want gradients for next Q to propagated
-        next_max_q = self.target_controller(next_state_goal_batch).detach().max(1)[0]
-        next_Q_values = not_done_mask * next_max_q
-        # Compute the target of the current Q values
-        target_Q_values = in_reward_batch + (gamma * next_Q_values)
-        current_Q_values = current_Q_values.view(len(current_Q_values)) #jangikim
-        # Compute Bellman error (using Huber loss)
-        loss = F.smooth_l1_loss(current_Q_values, target_Q_values)
-        # Copy Q to target Q before updating parameters of Q
-        self.target_controller.load_state_dict(self.controller.state_dict())
-        # Optimize the model
-        self.ctrl_optimizer.zero_grad()
-        loss.backward()
-        for param in self.controller.parameters():
-            param.grad.data.clamp_(-1, 1)
-        self.ctrl_optimizer.step()
-        '''
+        #self._sync_optimizers()
+        #self._init_target_net()

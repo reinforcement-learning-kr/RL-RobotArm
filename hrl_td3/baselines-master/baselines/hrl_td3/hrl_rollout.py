@@ -3,7 +3,7 @@ from collections import deque
 from numpy import linalg as LA
 import numpy as np
 import pickle
-from baselines.hrl_td3.hrl_util import ReplayBuffer
+from baselines.hrl_td3.hrl_util import H_ReplayBuffer
 from mujoco_py import MujocoException
 
 from baselines.her.util import convert_episode_to_batch_major, store_args
@@ -45,8 +45,8 @@ class RolloutWorker:
         self.g = np.empty((self.rollout_batch_size, self.dims['g']), np.float32)  # goals
         self.initial_o = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)  # observations
         #jangikim
-        self.low_replay_buffer = ReplayBuffer()
-        self.high_replay_buffer = ReplayBuffer()
+        #self.low_replay_buffer = H_ReplayBuffer()
+        #self.high_replay_buffer = H_ReplayBuffer()
 
         self.initial_ag = np.empty((self.rollout_batch_size, self.dims['g']), np.float32)  # achieved goals
         self.reset_all_rollouts()
@@ -92,29 +92,30 @@ class RolloutWorker:
 
         #jangikim
         low_nn_at = []
+        Rt_high_sum = 0
 
         ####################################################
         high_level_train_step = 10 #jangikim
         total_timestep = 1
-        episode_timesteps = 0
-
 
         for t in range(self.T):
 
             policy_output = self.policy.get_low_actions(
                 #o, ag, self.g,
-                o, high_goal_gt,
+                #o, high_goal_gt,
+                o, ag, high_goal_gt,
                 compute_Q=self.compute_Q,
                 noise_eps=self.noise_eps if not self.exploit else 0.,
                 random_eps=self.random_eps if not self.exploit else 0.,
                 use_target_net=self.use_target_net)
 
-            #if self.compute_Q:
-            #    u, Q = policy_output
-            #    Qs.append(Q)
-            #else:
-            #    u = policy_output
-            u = policy_output
+            if self.compute_Q:
+                #u, Q = policy_output
+                u = policy_output
+                Q = self.policy.Get_Q_value(o, high_goal_gt, u)
+                Qs.append(Q)
+            else:
+                u = policy_output
 
             if u.ndim == 1:
                 # The non-batched case should still have a reasonable shape.
@@ -163,73 +164,38 @@ class RolloutWorker:
 
             if done_new[0]:
                 print("done_new[0] : ", done_new[0])
-                episode_timesteps = 0
 
             if total_timestep % high_level_train_step == 0:
 
+                high_goal_gt = self.policy.get_high_goal_gt(o,
+                    compute_Q=self.compute_Q,
+                    noise_eps=self.noise_eps if not self.exploit else 0.,
+                    random_eps=self.random_eps if not self.exploit else 0.,
+                    use_target_net=self.use_target_net)
 
-                #ret = self.meta_controller.select_action(joint_low_state_goal)
-                high_goal_gt = self.policy.get_high_goal_gt(o)
-
-                high_goal_gt_bar = self.policy.get_high_goal_gt_bar(high_old_obj_st, o_new, low_nn_at)
-
-                # Store data in replay buffer of high layer
-                # self.low_replay_buffer.add((obs, new_obs, action, reward, done_bool))
-                self.high_replay_buffer.add((o[0], o_new[0], np.array(high_goal_gt_bar[0].copy()), reward, done_new[0]))
-
-                #x, y, u, x_r, x_d = self.high_replay_buffer.sample(100)
-                '''
-                print("meta cont t : ", t)
-                print("meta cont total_timestep : ", total_timestep)
-                print("meta_cont episode_timesteps : ", int(total_timestep / 10))
-
-                print("meta cont o[0] : ", o[0])
-                print("meta cont o_new[0] : ", o_new[0])
-                print("meta cont high_goal_gt_bar : ", high_goal_gt_bar)
-                print("meta cont high_goal_gt_bar[0] : ", high_goal_gt_bar[0])
-
-                print("meta cont reward : ", reward)
-                print("meta cont done_new[0] : ", done_new[0])
-
-
-                print("meta cont o[0]  type : ", type(o[0]))
-                print("meta cont o_new[0] type : ", type(o_new[0]))
-                print("meta cont high_goal_gt_bar type : ", type(high_goal_gt_bar))
-                print("meta cont high_goal_gt_bar[0] type : ", type(high_goal_gt_bar[0]))
-                print("meta cont reward type : ", type(reward))
-                print("meta cont done_new[0] type : ", type(done_new[0]))
-                '''
-
-
-                self.policy.update_meta_controller(self.high_replay_buffer, int(total_timestep/10))
+                high_goal_gt_bar = self.policy.get_high_goal_gt_bar(high_old_obj_st, o_new, low_nn_at, ag)
+                self.policy.update_meta_controller(o[0], o_new[0], np.array(high_goal_gt_bar[0].copy()), Rt_high_sum, done_new[0], int(total_timestep/10))
 
                 high_old_obj_st = o_new
                 low_nn_at[:] = []
+                Rt_high_sum = 0
 
             else:
                 high_goal_gt = o + high_goal_gt - o_new
 
+            Rt_high_sum += reward
             low_nn_at.append(u.copy())
-
             intrinsic_reward = -LA.norm(o + high_goal_gt - o_new)
-            # Store data in replay buffer of low layer
-            #self.low_replay_buffer.add((obs, new_obs, action, reward, done_bool))
-            joint_low_state_goal_old = np.concatenate([o, high_goal_gt], axis=None)
-            joint_low_state_goal_new = np.concatenate([o_new, high_goal_gt], axis=None)
-            self.low_replay_buffer.add((joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u[0], intrinsic_reward, done_new.copy()))
-            #Update low layer
-            '''
-            print("cont episode_timesteps : ", episode_timesteps)
+
             print("cont t : ", t)
             print("cont total_timestep : ", total_timestep)
-            '''
+
             #print("u[0] : ", u[0])
-            self.policy.update_controller(self.low_replay_buffer, total_timestep)
+            self.policy.update_controller(o, o_new, high_goal_gt, u[0], intrinsic_reward, done_new.copy(), total_timestep)
 
             o[...] = o_new
             ag[...] = ag_new
             total_timestep += 1
-            episode_timesteps += 1
 
         obs.append(o.copy())
         achieved_goals.append(ag.copy())
@@ -247,8 +213,8 @@ class RolloutWorker:
         assert successful.shape == (self.rollout_batch_size,)
         success_rate = np.mean(successful)
         self.success_history.append(success_rate)
-        #if self.compute_Q:
-        #    self.Q_history.append(np.mean(Qs))
+        if self.compute_Q:
+            self.Q_history.append(np.mean(Qs))
         self.n_episodes += self.rollout_batch_size
 
 

@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 #import utils
-from baselines.hrl_td3.hrl_util import ReplayBuffer
+from baselines.hrl_td3.hrl_util import H_ReplayBuffer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -83,10 +83,32 @@ class TD3(object):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
+    def get_Q_value(self, o, u, policy_noise=0.2, noise_clip=0.5):
+        # Compute the target Q value
+        '''
+        #target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+        #next_state = torch.FloatTensor(o).to(device)
+        next_state = torch.FloatTensor(o.reshape(1, -1)).to(device)
+        # Select action according to policy and add clipped noise
+        noise = torch.FloatTensor(u).data.normal_(0, policy_noise).to(device)
+        noise = noise.clamp(-noise_clip, noise_clip)
+        next_action = (self.actor_target(next_state) + noise).clamp(-self.max_action, self.max_action)
+        '''
+        #target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+        #target_Q = torch.min(target_Q1, target_Q2)
+
+        state = torch.FloatTensor(o.reshape(1, -1)).to(device)
+        action = torch.FloatTensor(u.reshape(1, -1)).to(device)
+        current_Q1, current_Q2 = self.critic(state,action)
+        current_Q = torch.min(current_Q1, current_Q2)
+
+        #return target_Q
+        return current_Q.detach().numpy()
+
     def train(self, replay_buffer, iterations, batch_size=100, discount=0.99, tau=0.005, policy_noise=0.2,
               noise_clip=0.5, policy_freq=2):
 
-        print("iterations : ", iterations)
+        #print("iterations : ", iterations)
         for it in range(iterations):
 
             # Sample replay buffer
