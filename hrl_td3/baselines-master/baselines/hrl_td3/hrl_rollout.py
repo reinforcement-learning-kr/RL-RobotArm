@@ -102,7 +102,6 @@ class RolloutWorker:
 
             policy_output = self.policy.get_low_actions(
                 #o, ag, self.g,
-                #o, high_goal_gt,
                 o, ag, high_goal_gt,
                 compute_Q=self.compute_Q,
                 noise_eps=self.noise_eps if not self.exploit else 0.,
@@ -167,14 +166,14 @@ class RolloutWorker:
 
             if total_timestep % high_level_train_step == 0:
 
-                high_goal_gt = self.policy.get_high_goal_gt(o,
+                high_goal_gt = self.policy.get_high_goal_gt(o, ag, self.g,
                     compute_Q=self.compute_Q,
                     noise_eps=self.noise_eps if not self.exploit else 0.,
                     random_eps=self.random_eps if not self.exploit else 0.,
                     use_target_net=self.use_target_net)
 
-                high_goal_gt_bar = self.policy.get_high_goal_gt_bar(high_old_obj_st, o_new, low_nn_at, ag)
-                self.policy.update_meta_controller(o[0], o_new[0], np.array(high_goal_gt_bar[0].copy()), Rt_high_sum, done_new[0], int(total_timestep/10))
+                high_goal_gt_bar = self.policy.get_high_goal_gt_bar(high_old_obj_st, ag, self.g, o_new, low_nn_at)
+                self.policy.update_meta_controller(o[0], ag, self.g, o_new[0], np.array(high_goal_gt_bar[0].copy()), Rt_high_sum, done_new[0], int(total_timestep/10))
 
                 high_old_obj_st = o_new
                 low_nn_at[:] = []

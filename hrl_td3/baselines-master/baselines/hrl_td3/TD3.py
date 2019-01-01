@@ -17,8 +17,10 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
 
-        self.l1 = nn.Linear(state_dim, 400)
-        self.l2 = nn.Linear(400, 300)
+        #self.l1 = nn.Linear(state_dim, 400)
+        #self.l2 = nn.Linear(400, 300)
+        self.l1 = nn.Linear(state_dim, 300)
+        self.l2 = nn.Linear(300, 300)
         self.l3 = nn.Linear(300, action_dim)
 
         self.max_action = max_action
@@ -35,13 +37,17 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         # Q1 architecture
-        self.l1 = nn.Linear(state_dim + action_dim, 400)
-        self.l2 = nn.Linear(400, 300)
+        #self.l1 = nn.Linear(state_dim + action_dim, 400)
+        #self.l2 = nn.Linear(400, 300)
+        self.l1 = nn.Linear(state_dim + action_dim, 300)
+        self.l2 = nn.Linear(300, 300)
         self.l3 = nn.Linear(300, 1)
 
         # Q2 architecture
-        self.l4 = nn.Linear(state_dim + action_dim, 400)
-        self.l5 = nn.Linear(400, 300)
+        #self.l4 = nn.Linear(state_dim + action_dim, 400)
+        #self.l5 = nn.Linear(400, 300)
+        self.l4 = nn.Linear(state_dim + action_dim, 300)
+        self.l5 = nn.Linear(300, 300)
         self.l6 = nn.Linear(300, 1)
 
     def forward(self, x, u):
@@ -79,6 +85,9 @@ class TD3(object):
 
         self.max_action = max_action
 
+        #jangikim
+        self.default_clip_range = 5
+
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
@@ -105,6 +114,26 @@ class TD3(object):
         #return target_Q
         return current_Q.detach().numpy()
 
+    #jangikim
+
+    def reshape_for_broadcasting(self, source12, target):
+        """Reshapes a tensor (source) to have the correct shape and dtype of the target
+        before broadcasting it with MPI.
+        """
+        dim = len(target.shape)
+        shape = ([1] * (dim - 1)) + [-1]
+        return np.reshape(source12.astype(target.dtype), shape)
+
+    def normalize(self, v, clip_range=None):
+        if clip_range is None:
+            clip_range = self.default_clip_range
+        np_mean = np.mean(v, axis =0)
+        np_std = np.std(v, axis = 0)
+        mean = self.reshape_for_broadcasting(np_mean, v)
+        std = self.reshape_for_broadcasting(np_std, v)
+        return np.clip((v - mean) / std, clip_range, clip_range)
+
+    #jangikim
     def train(self, replay_buffer, iterations, batch_size=100, discount=0.99, tau=0.005, policy_noise=0.2,
               noise_clip=0.5, policy_freq=2):
 
@@ -113,16 +142,10 @@ class TD3(object):
 
             # Sample replay buffer
             x, y, u, r, d = replay_buffer.sample(batch_size)
+            #x = self.normalize(x1)
+            #y = self.normalize(y1)
+
             state = torch.FloatTensor(x).to(device)
-            '''
-            print("it ", it)
-            if iterations == 1:
-                print("x : ", x)
-                print("y : ", y)
-                print("u : ", u)
-                print("r : ", r)
-                print("d : ", d)
-            '''
             action = torch.FloatTensor(u).to(device)
             next_state = torch.FloatTensor(y).to(device)
             done = torch.FloatTensor(1 - d).to(device)

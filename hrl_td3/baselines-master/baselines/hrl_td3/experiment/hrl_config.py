@@ -4,7 +4,8 @@ import gym
 from baselines import logger
 from baselines.her.ddpg import DDPG
 from baselines.hrl_td3.hrl import hrlTD3
-from baselines.her.her import make_sample_her_transitions
+#from baselines.her.her import make_sample_her_transitions
+from baselines.hrl_td3.her import make_sample_her_transitions
 
 
 DEFAULT_ENV_PARAMS = {

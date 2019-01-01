@@ -39,7 +39,7 @@ def train(policy, rollout_worker, evaluator,
     if policy.bc_loss == 1: policy.initDemoBuffer(demo_file) #initialize demo buffer if training with demonstrations
     for epoch in range(n_epochs):
         # train
-        ''''
+
         rollout_worker.clear_history()
         for _ in range(n_cycles):
             episode = rollout_worker.generate_rollouts()
@@ -47,7 +47,7 @@ def train(policy, rollout_worker, evaluator,
             for _ in range(n_batches):
                 policy.train()
             policy.update_target_net()
-        '''
+
         # test
         evaluator.clear_history()
         for _ in range(n_test_rollouts):

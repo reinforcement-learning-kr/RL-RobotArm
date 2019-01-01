@@ -9,10 +9,12 @@ from mpi4py import MPI
 from baselines import logger
 from baselines.common import set_global_seeds
 from baselines.common.mpi_moments import mpi_moments
+#import baselines.her.experiment.config as config
 import baselines.hrl_td3.experiment.hrl_config as config
 #from baselines.her.rollout import RolloutWorker
 from baselines.hrl_td3.hrl_rollout import RolloutWorker
-from baselines.her.util import mpi_fork
+#from baselines.her.util import mpi_fork
+from baselines.hrl_td3.util import mpi_fork
 
 from subprocess import CalledProcessError
 
@@ -40,6 +42,7 @@ def train(policy, rollout_worker, evaluator,
     if policy.bc_loss == 1: policy.initDemoBuffer(demo_file) #initialize demo buffer if training with demonstrations
     for epoch in range(n_epochs):
         # train
+        print("===== train start ===== ")
         rollout_worker.clear_history()
         for _ in range(n_cycles):
             episode = rollout_worker.generate_rollouts()
@@ -48,12 +51,19 @@ def train(policy, rollout_worker, evaluator,
             #    policy.train()
             #policy.update_target_net()
 
+        print("===== train end ===== ")
+
+
         # test
+        print("===== test start ===== ")
         evaluator.clear_history()
-        #for _ in range(n_test_rollouts):
-        evaluator.generate_rollouts()
+        for _ in range(n_test_rollouts):
+            evaluator.generate_rollouts()
+        print("===== test end ===== ")
+
 
         # record logs
+        print("===== record logs start ===== ")
         logger.record_tabular('epoch', epoch)
         for key, val in evaluator.logs('test'):
             logger.record_tabular(key, mpi_average(val))
@@ -64,8 +74,11 @@ def train(policy, rollout_worker, evaluator,
 
         if rank == 0:
             logger.dump_tabular()
+        print("===== record logs end ===== ")
+
 
         # save the policy if it's better than the previous ones
+        print("===== save the policy start ===== ")
         success_rate = mpi_average(evaluator.current_success_rate())
         if rank == 0 and success_rate >= best_success_rate and save_policies:
             best_success_rate = success_rate
@@ -76,14 +89,17 @@ def train(policy, rollout_worker, evaluator,
             policy_path = periodic_policy_path.format(epoch)
             logger.info('Saving periodic policy to {} ...'.format(policy_path))
             evaluator.save_policy(policy_path)
+        print("===== save the policy end ===== ")
+
 
         # make sure that different threads have different seeds
+        print("===== make sure that differnence start ===== ")
         local_uniform = np.random.uniform(size=(1,))
         root_uniform = local_uniform.copy()
         MPI.COMM_WORLD.Bcast(root_uniform, root=0)
         if rank != 0:
             assert local_uniform[0] != root_uniform[0]
-
+        print("===== make sure that differnence end ===== ")
 
 def launch(
     env, logdir, n_epochs, num_cpu, seed, replay_strategy, policy_save_interval, clip_return,
