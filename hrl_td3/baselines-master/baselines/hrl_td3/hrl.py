@@ -473,7 +473,7 @@ class hrlTD3():
 
         return u
 
-    def get_high_goal_gt_bar(self, o, ag, g, o_new, low_nn_at):
+    def get_high_goal_gt_tilda(self, o, ag, g, o_new, low_nn_at):
         o, g = self._preprocess_og(o, ag, g)
         #policy = self.target if use_target_net else self.main
         # values to compute
@@ -515,8 +515,8 @@ class hrlTD3():
 
         L2_norm_sum = 0
         log_low_policy = []
-        for gi_bar in goals_candidate:
-            joint_low_state_goal = np.concatenate([o, gi_bar], axis=None)
+        for gi_tilda in goals_candidate:
+            joint_low_state_goal = np.concatenate([n_o, gi_tilda], axis=None)
             low_ret = self.controller.select_action(np.array(joint_low_state_goal))
 
             for ai in low_nn_at:
@@ -556,26 +556,26 @@ class hrlTD3():
         return self.controller.get_Q_value(np.array(joint_low_state), u)
 
     #def update_meta_controller(self, episode_timesteps, args, gamma=1.0):
-    def update_meta_controller(self, o, ag, g, o_new, high_goal_gt_bar, r, d,  episode_timesteps):
+    def update_meta_controller(self, o, ag, g, o_new, high_goal_gt_tilda, r, d,  episode_timesteps):
         o, g = self._preprocess_og(o, ag, g)
 
         t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
         t_g = self.g_stats.normalize(tf.convert_to_tensor(g))
         t_o_new = self.o_stats.normalize(tf.convert_to_tensor(o_new))
-        t_high_goal_gt_bar = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt_bar))
+        t_high_goal_gt_tilda = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt_tilda))
 
         n_o = t_o.eval()
         n_g = t_g.eval()
         n_o_new = t_o_new.eval()
-        n_high_goal_gt_bar = t_high_goal_gt_bar.eval()
+        n_high_goal_gt_tilda = t_high_goal_gt_tilda.eval()
 
         joint_high_state = np.concatenate([n_o, n_g], axis=None)
         joint_high_state_new = np.concatenate([n_o_new, n_g], axis=None)
 
-        self.high_replay_buffer.add((joint_high_state, joint_high_state_new, n_high_goal_gt_bar, r, d))
+        self.high_replay_buffer.add((joint_high_state, joint_high_state_new, n_high_goal_gt_tilda, r, d))
 
 
-        #self.high_replay_buffer.add((o, o_new, high_goal_gt_bar, r, d))
+        #self.high_replay_buffer.add((o, o_new, high_goal_gt_tilda, r, d))
         #jangikim
         self.meta_controller.train(self.high_replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
                      self.noise_clip, self.policy_freq)
