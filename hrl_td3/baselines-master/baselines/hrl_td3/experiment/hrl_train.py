@@ -44,7 +44,9 @@ def train(policy, rollout_worker, evaluator,
         # train
         print("===== train start ===== ")
         rollout_worker.clear_history()
-        for _ in range(n_cycles):
+        #for _ in range(n_cycles):
+        for itrain in range(n_cycles):
+            print("itrain : ", itrain + 1)
             episode = rollout_worker.generate_rollouts()
             policy.store_episode(episode)
             #for _ in range(n_batches):
@@ -57,7 +59,9 @@ def train(policy, rollout_worker, evaluator,
         # test
         print("===== test start ===== ")
         evaluator.clear_history()
-        for _ in range(n_test_rollouts):
+        #for _ in range(n_test_rollouts):
+        for itest in range(n_test_rollouts):
+            print ("itest : ", itest + 1)
             evaluator.generate_rollouts()
         print("===== test end ===== ")
 

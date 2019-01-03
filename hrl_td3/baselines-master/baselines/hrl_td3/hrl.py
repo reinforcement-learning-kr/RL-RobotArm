@@ -379,10 +379,10 @@ class hrlTD3():
         g = np.clip(g, -self.clip_obs, self.clip_obs)
         return o, g
 
-    def get_low_actions(self, o, ag, hg, noise_eps=0., random_eps=0., use_target_net=False,
+    def get_low_actions(self, o1, ag, hg1, noise_eps=0., random_eps=0., use_target_net=False,
     #def get_low_actions(self, o, g, noise_eps=0., random_eps=0., use_target_net=False,
                     compute_Q=False):
-        o, dummyg = self._preprocess_og(o, ag, hg) #In this process, hg  is meaningless.
+        o, hg = self._preprocess_og(o1, ag, hg1)
         '''
         o, g = self._preprocess_og(o, ag, g)
         policy = self.target if use_target_net else self.main
@@ -401,7 +401,7 @@ class hrlTD3():
         '''
         #jangikim
         #joint_low_state_goal = np.concatenate([o, g], axis=None)
-
+        '''
         t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
         t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(hg))
 
@@ -409,8 +409,8 @@ class hrlTD3():
         n_high_goal_gt = t_high_goal_gt.eval()
 
         joint_low_state_goal = np.concatenate([n_o, n_high_goal_gt], axis=None)
-
-        #joint_low_state_goal = np.concatenate([o, g], axis=None)
+        '''
+        joint_low_state_goal = np.concatenate([o, hg], axis=None)
 
         ret = self.controller.select_action(np.array(joint_low_state_goal))
 
@@ -445,8 +445,9 @@ class hrlTD3():
 
     def get_high_goal_gt (self, o, ag, g, noise_eps=0., random_eps=0.,
                           use_target_net=False, compute_Q=False):
-        o, g = self._preprocess_og(o, ag, g)
+        o, g = self._preprocess_og(o, ag, g) #for cliping o, g
 
+        '''
         t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
         t_g = self.g_stats.normalize(tf.convert_to_tensor(g))
 
@@ -454,7 +455,9 @@ class hrlTD3():
         n_g = t_g.eval()
 
         joint_high_state = np.concatenate([n_o, n_g], axis=None)
+        '''
 
+        joint_high_state = np.concatenate([o, g], axis=None)
         ret = self.meta_controller.select_action(joint_high_state)
 
         #ret = self.meta_controller.select_action(o)
@@ -474,7 +477,8 @@ class hrlTD3():
         return u
 
     def get_high_goal_gt_tilda(self, o, ag, g, o_new, low_nn_at):
-        o, g = self._preprocess_og(o, ag, g)
+        o, g = self._preprocess_og(o, ag, g) #for cliping o, g
+        o_new, g = self._preprocess_og(o_new, ag, g) #for cliping o_new
         #policy = self.target if use_target_net else self.main
         # values to compute
         '''
@@ -490,7 +494,7 @@ class hrlTD3():
         ret = self.sess.run(vals, feed_dict=feed)
         '''
         #jangikim
-
+        '''
         t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
         t_g = self.g_stats.normalize(tf.convert_to_tensor(g))
 
@@ -498,7 +502,8 @@ class hrlTD3():
         n_g = t_g.eval()
 
         joint_high_state = np.concatenate([n_o, n_g], axis=None)
-
+        '''
+        joint_high_state = np.concatenate([o, g], axis=None)
         ret = self.meta_controller.select_action(joint_high_state)
 
         #ret = self.meta_controller.select_action(o)
@@ -516,7 +521,8 @@ class hrlTD3():
         L2_norm_sum = 0
         log_low_policy = []
         for gi_tilda in goals_candidate:
-            joint_low_state_goal = np.concatenate([n_o, gi_tilda], axis=None)
+            #joint_low_state_goal = np.concatenate([n_o, gi_tilda], axis=None)
+            joint_low_state_goal = np.concatenate([o, gi_tilda], axis=None)
             low_ret = self.controller.select_action(np.array(joint_low_state_goal))
 
             for ai in low_nn_at:
@@ -543,7 +549,8 @@ class hrlTD3():
         #    return ret
 
     def Get_Q_value(self, o, high_goal_gt, u):
-
+        o, high_goal_gt = self._preprocess_og(o, high_goal_gt, high_goal_gt)  # for cliping o, high_goal_gt
+        '''
         t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
         t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt))
 
@@ -551,14 +558,17 @@ class hrlTD3():
         n_high_goal_gt = t_high_goal_gt.eval()
 
         joint_low_state = np.concatenate([n_o, n_high_goal_gt], axis=None)
-
-        #joint_low_state_goal = np.concatenate([o, high_goal_gt], axis=None)
+        '''
+        joint_low_state = np.concatenate([o, high_goal_gt], axis=None)
         return self.controller.get_Q_value(np.array(joint_low_state), u)
 
     #def update_meta_controller(self, episode_timesteps, args, gamma=1.0):
     def update_meta_controller(self, o, ag, g, o_new, high_goal_gt_tilda, r, d,  episode_timesteps):
-        o, g = self._preprocess_og(o, ag, g)
 
+        o, g = self._preprocess_og(o, ag, g) #for cliping o, g
+        o_new, g = self._preprocess_og(o_new, ag, g) #for cliping o_new
+
+        '''
         t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
         t_g = self.g_stats.normalize(tf.convert_to_tensor(g))
         t_o_new = self.o_stats.normalize(tf.convert_to_tensor(o_new))
@@ -571,9 +581,11 @@ class hrlTD3():
 
         joint_high_state = np.concatenate([n_o, n_g], axis=None)
         joint_high_state_new = np.concatenate([n_o_new, n_g], axis=None)
-
-        self.high_replay_buffer.add((joint_high_state, joint_high_state_new, n_high_goal_gt_tilda, r, d))
-
+        self.high_replay_buffer.add((joint_high_state, joint_high_state_new, n_high_goal_gt_tilda, r, d))        
+        '''
+        joint_high_state = np.concatenate([o, g], axis=None)
+        joint_high_state_new = np.concatenate([o_new, g], axis=None)
+        self.high_replay_buffer.add((joint_high_state, joint_high_state_new, high_goal_gt_tilda, r, d))
 
         #self.high_replay_buffer.add((o, o_new, high_goal_gt_tilda, r, d))
         #jangikim
@@ -582,6 +594,8 @@ class hrlTD3():
 
     #def update_controller(self, episode_timesteps, args, gamma=1.0):
     def update_controller(self, o, o_new, high_goal_gt, u, r, d, episode_timesteps):
+        o, o_new = self._preprocess_og(o, o_new, o_new)  # for cliping o, o_new
+        '''
         t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
         t_o_new = self.o_stats.normalize(tf.convert_to_tensor(o_new))
         t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt))
@@ -592,9 +606,9 @@ class hrlTD3():
 
         joint_low_state_goal_old = np.concatenate([n_o, n_high_goal_gt], axis=None)
         joint_low_state_goal_new = np.concatenate([n_o_new, n_high_goal_gt], axis=None)
-
-        #joint_low_state_goal_old = np.concatenate([o, high_goal_gt], axis=None)
-        #joint_low_state_goal_new = np.concatenate([o_new, high_goal_gt], axis=None)
+        '''
+        joint_low_state_goal_old = np.concatenate([o, high_goal_gt], axis=None)
+        joint_low_state_goal_new = np.concatenate([o_new, high_goal_gt], axis=None)
         self.low_replay_buffer.add(
             (joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u, r, d))
 

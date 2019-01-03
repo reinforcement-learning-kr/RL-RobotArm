@@ -5,6 +5,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 #import utils
 from baselines.hrl_td3.hrl_util import H_ReplayBuffer
+from sklearn import preprocessing
+from sklearn.preprocessing import StandardScaler
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -17,10 +19,10 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
 
-        #self.l1 = nn.Linear(state_dim, 400)
-        #self.l2 = nn.Linear(400, 300)
-        self.l1 = nn.Linear(state_dim, 300)
-        self.l2 = nn.Linear(300, 300)
+        self.l1 = nn.Linear(state_dim, 400)
+        self.l2 = nn.Linear(400, 300)
+        #self.l1 = nn.Linear(state_dim, 300)
+        #self.l2 = nn.Linear(300, 300)
         self.l3 = nn.Linear(300, action_dim)
 
         self.max_action = max_action
@@ -37,10 +39,10 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         # Q1 architecture
-        #self.l1 = nn.Linear(state_dim + action_dim, 400)
-        #self.l2 = nn.Linear(400, 300)
-        self.l1 = nn.Linear(state_dim + action_dim, 300)
-        self.l2 = nn.Linear(300, 300)
+        self.l1 = nn.Linear(state_dim + action_dim, 400)
+        self.l2 = nn.Linear(400, 300)
+        #self.l1 = nn.Linear(state_dim + action_dim, 300)
+        #self.l2 = nn.Linear(300, 300)
         self.l3 = nn.Linear(300, 1)
 
         # Q2 architecture
@@ -87,8 +89,15 @@ class TD3(object):
 
         #jangikim
         self.default_clip_range = 5
+        self.scaler = StandardScaler(with_mean=False, with_std =False)
 
     def select_action(self, state):
+        '''
+        self.scaler = self.scaler.fit(state1.reshape(-1, 1))
+        state = self.scaler.transform(state1.reshape(-1, 1))
+
+        state2 = state.reshape(1, -1)
+        '''
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
@@ -105,12 +114,19 @@ class TD3(object):
         '''
         #target_Q1, target_Q2 = self.critic_target(next_state, next_action)
         #target_Q = torch.min(target_Q1, target_Q2)
+        '''
+        self.scaler = self.scaler.fit(o1.reshape(-1, 1))
+        o = self.scaler.transform(o1.reshape(-1, 1))
+        self.scaler = self.scaler.fit(u1.reshape(-1, 1))
+        u = self.scaler.transform(u1.reshape(-1, 1))
 
+        o2 = o.reshape(1, -1)
+        '''
         state = torch.FloatTensor(o.reshape(1, -1)).to(device)
         action = torch.FloatTensor(u.reshape(1, -1)).to(device)
         current_Q1, current_Q2 = self.critic(state,action)
-        current_Q = torch.min(current_Q1, current_Q2)
-
+        #current_Q = torch.min(current_Q1, current_Q2)
+        current_Q = torch.max(current_Q1, current_Q2)
         #return target_Q
         return current_Q.detach().numpy()
 
@@ -127,8 +143,8 @@ class TD3(object):
     def normalize(self, v, clip_range=None):
         if clip_range is None:
             clip_range = self.default_clip_range
-        np_mean = np.mean(v, axis =0)
-        np_std = np.std(v, axis = 0)
+        np_mean = np.mean(v, axis = 1)
+        np_std = np.std(v, axis = 1)
         mean = self.reshape_for_broadcasting(np_mean, v)
         std = self.reshape_for_broadcasting(np_std, v)
         return np.clip((v - mean) / std, clip_range, clip_range)
@@ -142,8 +158,16 @@ class TD3(object):
 
             # Sample replay buffer
             x, y, u, r, d = replay_buffer.sample(batch_size)
-            #x = self.normalize(x1)
-            #y = self.normalize(y1)
+            #x = self.normalize(x)
+            '''
+            self.scaler = self.scaler.fit(x1)
+            x = self.scaler.transform(x1)
+            self.scaler = self.scaler.fit(y1)
+            y = self.scaler.transform(y1)
+            '''
+           # x = np.clip((x1 - np.mean(x1)) / np.std(x1), self.clip_range, self.clip_range)
+           # y = np.clip((y1 - np.mean(y1)) / np.std(y1), self.clip_range, self.clip_range)
+
 
             state = torch.FloatTensor(x).to(device)
             action = torch.FloatTensor(u).to(device)
