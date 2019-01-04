@@ -85,7 +85,7 @@ class RolloutWorker:
         ####################### hrl #############################
 
         Rt_high_sum = np.zeros((self.rollout_batch_size, 1), np.float32)
-        high_level_count = 0
+        #high_level_count = 0
         total_timestep = 1
         high_goal_gt = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
         high_goal_gt_tilda = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
@@ -166,9 +166,9 @@ class RolloutWorker:
                 Rt_high_sum[i] += reward_new[i]
                 #low_nn_at[i][high_level_count-1] = u.copy()
                 if i == 0:
-                    low_nn_at_0[high_level_count] = u[0]
+                    low_nn_at_0[total_timestep % self.high_level_train_step] = u[0]
                 else:
-                    low_nn_at_1[high_level_count] = u[0]
+                    low_nn_at_1[total_timestep % self.high_level_train_step] = u[0]
 
                 if total_timestep % self.high_level_train_step == 0:
                     high_goal_gt[i] = self.policy.get_high_goal_gt(o[i], ag[i], self.g[i],
@@ -200,7 +200,7 @@ class RolloutWorker:
                     else:
                         low_nn_at_1 = np.zeros((self.high_level_train_step, self.dims['u']), np.float32)
                     Rt_high_sum[i] = 0
-                    high_level_count = 0
+                    #high_level_count = 0
                     ####################################################################################################
                 else:
                     high_goal_gt[i] = o[i] + high_goal_gt[i] - o_new[i]
@@ -222,7 +222,7 @@ class RolloutWorker:
 
             #################################################### hrl ###################################################
             total_timestep += 1
-            high_level_count += 1
+            #high_level_count += 1
             ############################################################################################################
 
             if np.isnan(o_new).any():
