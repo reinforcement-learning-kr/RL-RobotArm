@@ -181,14 +181,21 @@ class RolloutWorker:
                                                                    use_target_net=self.use_target_net)
                     #low_nn_ati = np.array(low_nn_at[i], dtype=object).reshape(self.high_level_train_step, self.dims['u'])
 
+                    print("high_old_obj_st[i] ", high_old_obj_st[i])
+                    print("ag[i] ", ag[i])
+                    print("self.g[i] ", self.g[i])
+                    print("o_new[i] ", o_new[i])
+
                     if i == 0:
+                        print("low_nn_at_0 ", low_nn_at_0)
                         high_goal_gt_tilda[i] = self.policy.get_high_goal_gt_tilda(high_old_obj_st[i], ag[i], self.g[i],
                                                                                o_new[i],
-                                                                               low_nn_at_0)
+                                                                               low_nn_at_0[0])
                     else:
+                        print("low_nn_at_1 ", low_nn_at_1)
                         high_goal_gt_tilda[i] = self.policy.get_high_goal_gt_tilda(high_old_obj_st[i], ag[i], self.g[i],
                                                                                o_new[i],
-                                                                               low_nn_at_1)
+                                                                               low_nn_at_1[0])
                     self.policy.update_meta_controller(o[i], ag[i], self.g[i], o_new[i],
                                                        np.array(high_goal_gt_tilda[i]), Rt_high_sum[i],
                                                        done_new[i],
