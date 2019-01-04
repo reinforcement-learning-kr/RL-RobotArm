@@ -166,9 +166,9 @@ class RolloutWorker:
                 Rt_high_sum[i] += reward_new[i]
                 #low_nn_at[i][high_level_count-1] = u.copy()
                 if i == 0:
-                    low_nn_at_0[total_timestep % self.high_level_train_step] = u[0]
+                    low_nn_at_0[t % self.high_level_train_step] = u[0]
                 else:
-                    low_nn_at_1[total_timestep % self.high_level_train_step] = u[0]
+                    low_nn_at_1[t % self.high_level_train_step] = u[0]
 
                 if total_timestep % self.high_level_train_step == 0:
                     high_goal_gt[i] = self.policy.get_high_goal_gt(o[i], ag[i], self.g[i],
