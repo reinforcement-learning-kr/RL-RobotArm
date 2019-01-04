@@ -85,7 +85,7 @@ class RolloutWorker:
         ####################### hrl #############################
 
         Rt_high_sum = np.zeros((self.rollout_batch_size, 1), np.float32)
-        high_level_count = 1
+        high_level_count = 0
         total_timestep = 1
         high_goal_gt = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
         high_goal_gt_tilda = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
@@ -101,6 +101,9 @@ class RolloutWorker:
         ##########################################################
 
         for t in range(self.T):
+            print("cont t : ", t)
+            print("cont total_timestep : ", total_timestep)
+
 
             o_new = np.empty((self.rollout_batch_size, self.dims['o']))
             ag_new = np.empty((self.rollout_batch_size, self.dims['g']))
@@ -123,7 +126,7 @@ class RolloutWorker:
                 if self.compute_Q:
                     # u, Q = policy_output
                     u = policy_output
-                    Q = self.policy.Get_Q_value(o[i], high_goal_gt[i], u)
+                    Q = self.policy.Get_Q_value(o[i], high_goal_gt[i], u[0])
                     Qs.append(Q)
                 else:
                     u = policy_output
@@ -160,6 +163,13 @@ class RolloutWorker:
                 if done_new[i]:
                     print("done_new[{0}] : ".format(i), done_new[i])
 
+                Rt_high_sum[i] += reward_new[i]
+                #low_nn_at[i][high_level_count-1] = u.copy()
+                if i == 0:
+                    low_nn_at_0[high_level_count] = u[0]
+                else:
+                    low_nn_at_1[high_level_count] = u[0]
+
                 if total_timestep % self.high_level_train_step == 0:
                     high_goal_gt[i] = self.policy.get_high_goal_gt(o[i], ag[i], self.g[i],
                                                                    compute_Q=self.compute_Q,
@@ -177,7 +187,7 @@ class RolloutWorker:
                                                                                o_new[i],
                                                                                low_nn_at_1)
                     self.policy.update_meta_controller(o[i], ag[i], self.g[i], o_new[i],
-                                                       np.array(high_goal_gt_tilda[i].copy()), Rt_high_sum[i],
+                                                       np.array(high_goal_gt_tilda[i]), Rt_high_sum[i],
                                                        done_new[i],
                                                        int(total_timestep / self.high_level_train_step))
 
@@ -190,29 +200,27 @@ class RolloutWorker:
                     else:
                         low_nn_at_1 = np.zeros((self.high_level_train_step, self.dims['u']), np.float32)
                     Rt_high_sum[i] = 0
-                    high_level_count = 1
+                    high_level_count = 0
                     ####################################################################################################
                 else:
                     high_goal_gt[i] = o[i] + high_goal_gt[i] - o_new[i]
 
+                '''
                 Rt_high_sum[i] += reward_new[i]
                 #low_nn_at[i][high_level_count-1] = u.copy()
                 if i == 0:
-                    low_nn_at_0[high_level_count-1] = u.copy()
+                    low_nn_at_0[high_level_count-1] = u[0].copy()
                 else:
-                    low_nn_at_1[high_level_count-1] = u.copy()
-
+                    low_nn_at_1[high_level_count-1] = u[0].copy()
+                '''
                 intrinsic_reward[i] = -LA.norm(o + high_goal_gt - o_new)
 
                 self.policy.update_controller(o[i], o_new[i], high_goal_gt[i], u[0], intrinsic_reward[i],
-                                              done_new[i].copy(),
+                                              done_new[i],
                                               total_timestep)
                 ########################################################################################################
 
             #################################################### hrl ###################################################
-            print("cont t : ", t)
-            print("cont total_timestep : ", total_timestep)
-
             total_timestep += 1
             high_level_count += 1
             ############################################################################################################
