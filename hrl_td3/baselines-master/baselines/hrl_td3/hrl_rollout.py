@@ -91,6 +91,8 @@ class RolloutWorker:
         high_goal_gt_tilda = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
         high_old_obj_st = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)
 
+        u_temp = np.empty((self.rollout_batch_size, self.dims['u']), np.float32)
+
         #low_nn_at = []
         low_nn_at_0 = np.empty((self.high_level_train_step, self.dims['u']), np.float32)
         low_nn_at_1 = np.empty((self.high_level_train_step, self.dims['u']), np.float32)
@@ -164,6 +166,7 @@ class RolloutWorker:
                     print("done_new[{0}] : ".format(i), done_new[i])
 
                 Rt_high_sum[i] += reward_new[i]
+                u_temp[i] = u[0]
                 #low_nn_at[i][high_level_count-1] = u.copy()
                 if i == 0:
                     low_nn_at_0[t % self.high_level_train_step] = u[0]
@@ -233,7 +236,8 @@ class RolloutWorker:
             obs.append(o.copy())
             achieved_goals.append(ag.copy())
             successes.append(success.copy())
-            acts.append(u.copy())
+            #acts.append(u.copy())
+            acts.append(u_temp.copy())
             goals.append(self.g.copy())
             o[...] = o_new
             ag[...] = ag_new
