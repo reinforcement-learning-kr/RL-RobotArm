@@ -125,8 +125,8 @@ class TD3(object):
         state = torch.FloatTensor(o.reshape(1, -1)).to(device)
         action = torch.FloatTensor(u.reshape(1, -1)).to(device)
         current_Q1, current_Q2 = self.critic(state,action)
-        #current_Q = torch.min(current_Q1, current_Q2)
-        current_Q = torch.max(current_Q1, current_Q2)
+        current_Q = torch.min(current_Q1, current_Q2)
+        #current_Q = torch.max(current_Q1, current_Q2)
         #return target_Q
         return current_Q.detach().numpy()
 

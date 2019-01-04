@@ -58,6 +58,9 @@ class ReplayBuffer:
         """episode_batch: array(batch_size x (T or T+1) x dim_key)
         """
         batch_sizes = [len(episode_batch[key]) for key in episode_batch.keys()]
+        temp_batch_sizes = batch_sizes[0]
+        temp_np_array = np.array(batch_sizes)
+
         assert np.all(np.array(batch_sizes) == batch_sizes[0])
         batch_size = batch_sizes[0]
 
