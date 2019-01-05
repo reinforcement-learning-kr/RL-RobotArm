@@ -94,11 +94,11 @@ class RolloutWorker:
         u_temp = np.empty((self.rollout_batch_size, self.dims['u']), np.float32)
 
         #low_nn_at = []
-        low_nn_at_0 = np.empty((self.high_level_train_step, self.dims['u']), np.float32)
-        low_nn_at_1 = np.empty((self.high_level_train_step, self.dims['u']), np.float32)
+        #low_nn_at_0 = np.empty((self.high_level_train_step, self.dims['u']), np.float32)
+        #low_nn_at_1 = np.empty((self.high_level_train_step, self.dims['u']), np.float32)
 
-        #low_nn_at = np.empty((self.high_level_train_step*self.rollout_batch_size, self.dims['u']),
-        #                          np.float32).reshape(self.rollout_batch_size, self.high_level_train_step, self.dims['u'])
+        low_nn_at = np.empty((self.high_level_train_step*self.rollout_batch_size, self.dims['u']),
+                                  np.float32).reshape(self.rollout_batch_size, self.high_level_train_step, self.dims['u'])
         intrinsic_reward = np.zeros((self.rollout_batch_size, 1), np.float32)
         ##########################################################
 
@@ -172,10 +172,12 @@ class RolloutWorker:
                 Rt_high_sum[i] += reward_new[i]
                 u_temp[i] = u
                 #low_nn_at[i][high_level_count-1] = u.copy()
-                if i == 0:
-                    low_nn_at_0[t % self.high_level_train_step] = u
-                else:
-                    low_nn_at_1[t % self.high_level_train_step] = u
+                #if i == 0:
+                #    low_nn_at_0[t % self.high_level_train_step] = u
+                #else:
+                #    low_nn_at_1[t % self.high_level_train_step] = u
+
+                low_nn_at[i][t % self.high_level_train_step] = u
 
                 if total_timestep % self.high_level_train_step == 0:
                     high_goal_gt[i] = self.policy.get_high_goal_gt(o[i], ag[i], self.g[i],
@@ -190,6 +192,7 @@ class RolloutWorker:
                     #print("self.g[i] ", self.g[i])
                     #print("o_new[i] ", o_new[i])
 
+                    '''
                     if i == 0:
                         #print("low_nn_at_0 ", low_nn_at_0)
                         high_goal_gt_tilda[i] = self.policy.get_high_goal_gt_tilda(high_old_obj_st[i], ag[i], self.g[i],
@@ -201,6 +204,10 @@ class RolloutWorker:
                         high_goal_gt_tilda[i] = self.policy.get_high_goal_gt_tilda(high_old_obj_st[i], ag[i], self.g[i],
                                                                                o_new[i],
                                                                                low_nn_at_1)
+                    '''
+                    high_goal_gt_tilda[i] = self.policy.get_high_goal_gt_tilda(high_old_obj_st[i], ag[i], self.g[i],
+                                                                           o_new[i],
+                                                                           low_nn_at[i])
                         #print("high_goal_gt_tilda[i] : ", high_goal_gt_tilda[i])
                     self.policy.update_meta_controller(o[i], ag[i], self.g[i], o_new[i],
                                                        np.array(high_goal_gt_tilda[i]), Rt_high_sum[i],
@@ -210,11 +217,13 @@ class RolloutWorker:
                     #################################### reset condition variables #####################################
                     high_old_obj_st[i] = o_new[i]
                     # low_nn_at[:] = []
-                    #low_nn_at[i] = np.zeros((self.high_level_train_step, self.dims['u']), np.float32)
+                    low_nn_at[i] = np.zeros((self.high_level_train_step, self.dims['u']), np.float32)
+                    '''
                     if i == 0:
                         low_nn_at_0 = np.zeros((self.high_level_train_step, self.dims['u']), np.float32)
                     else:
                         low_nn_at_1 = np.zeros((self.high_level_train_step, self.dims['u']), np.float32)
+                    '''
                     Rt_high_sum[i] = 0
                     #high_level_count = 0
                     ####################################################################################################
