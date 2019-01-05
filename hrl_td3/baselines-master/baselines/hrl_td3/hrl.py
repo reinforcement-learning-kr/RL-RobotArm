@@ -382,6 +382,7 @@ class hrlTD3():
     def get_low_actions(self, o1, ag, hg1, noise_eps=0., random_eps=0., use_target_net=False,
     #def get_low_actions(self, o, g, noise_eps=0., random_eps=0., use_target_net=False,
                     compute_Q=False):
+
         o, hg = self._preprocess_og(o1, ag, hg1)
         '''
         o, g = self._preprocess_og(o, ag, g)
@@ -412,8 +413,11 @@ class hrlTD3():
         '''
         joint_low_state_goal = np.concatenate([o, hg], axis=None)
 
+        #print("joint_low_state_goal : ", joint_low_state_goal)
+
         ret = self.controller.select_action(np.array(joint_low_state_goal))
 
+        #print(" get_low_actions ret : ", ret)
         # action postprocessing
         #jangikim
         #u = ret[0]
@@ -429,6 +433,9 @@ class hrlTD3():
         u3 = u1 * u2
         u += u3
 
+        #print("get_low_actions u1 : ", u1)
+        #print("get_low_actions u2 : ", u2)
+        #print("get_low_actions u3 : ", u3)
         '''
         if u.shape[0] == 1:
             u = u[0]
@@ -464,6 +471,8 @@ class hrlTD3():
 
         u = ret
 
+        #print("get_high_goal_gt u : ", u)
+
         noise = noise_eps * self.max_u * np.random.randn(*u.shape)  # gaussian noise
         u += noise
         u = np.clip(u, -self.max_u, self.max_u)
@@ -474,9 +483,11 @@ class hrlTD3():
         u3 = u1 * u2
         u += u3
 
+        #print("get_high_goal_gt final u : ", u)
         return u
 
     def get_high_goal_gt_tilda(self, o, ag, g, o_new, low_nn_at):
+        #print ("get_high_goal_gt_tilda low_nn_at : ", low_nn_at)
         o, g = self._preprocess_og(o, ag, g) #for cliping o, g
         o_new, g = self._preprocess_og(o_new, ag, g) #for cliping o_new
         #policy = self.target if use_target_net else self.main
@@ -516,8 +527,9 @@ class hrlTD3():
         for x in range(8):
             goals_candidate.append(np.random.randn(*ret.shape) + mu)
         goals_candidate.append(mu)
-        goals_candidate.append([ret])
+        goals_candidate.append(ret)
 
+        #print("goals_candidate : ", goals_candidate)
         L2_norm_sum = 0
         log_low_policy = []
         for gi_tilda in goals_candidate:
@@ -529,10 +541,13 @@ class hrlTD3():
                 L2_norm = LA.norm(ai - low_ret)
                 L2_norm_sum += L2_norm*L2_norm
 
+            #print("-(L2_norm_sum / 2) : ", -(L2_norm_sum / 2))
             log_low_policy.append(-(L2_norm_sum / 2))
             L2_norm_sum = 0
 
         max_num = np.argmax(np.asarray(log_low_policy))
+        #print("max_num : ", max_num)
+        print("goals_candidate[max_num] : ", goals_candidate[max_num])
         return goals_candidate[max_num]
 
         #u += noise
@@ -559,7 +574,11 @@ class hrlTD3():
 
         joint_low_state = np.concatenate([n_o, n_high_goal_gt], axis=None)
         '''
+        print("Get_Q_value u : ", u)
+        #print ("Get_Q_value o : ", o)
+        #print ("Get_Q_value high_goal_gt : ", high_goal_gt)
         joint_low_state = np.concatenate([o, high_goal_gt], axis=None)
+        #print("Get_Q_value joint_low_state : ", joint_low_state)
         return self.controller.get_Q_value(np.array(joint_low_state), u)
 
     #def update_meta_controller(self, episode_timesteps, args, gamma=1.0):
@@ -607,10 +626,12 @@ class hrlTD3():
         joint_low_state_goal_old = np.concatenate([n_o, n_high_goal_gt], axis=None)
         joint_low_state_goal_new = np.concatenate([n_o_new, n_high_goal_gt], axis=None)
         '''
+        #print( " update_controller u : ", u)
+        #print(" update_controller u[0] : ", u[0])
         joint_low_state_goal_old = np.concatenate([o, high_goal_gt], axis=None)
         joint_low_state_goal_new = np.concatenate([o_new, high_goal_gt], axis=None)
         self.low_replay_buffer.add(
-            (joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u, r, d))
+            (joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u[0], r, d))
 
         self.controller.train(self.low_replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
                      self.noise_clip, self.policy_freq)

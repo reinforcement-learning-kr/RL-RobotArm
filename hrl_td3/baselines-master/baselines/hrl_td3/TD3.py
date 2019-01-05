@@ -98,6 +98,8 @@ class TD3(object):
 
         state2 = state.reshape(1, -1)
         '''
+
+        #print("TD3 select_action state : ", state)
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
@@ -128,7 +130,7 @@ class TD3(object):
         current_Q = torch.min(current_Q1, current_Q2)
         #current_Q = torch.max(current_Q1, current_Q2)
         #return target_Q
-        return current_Q.detach().cpu().numpy()
+        return current_Q.detach().numpy()
 
     #jangikim
 

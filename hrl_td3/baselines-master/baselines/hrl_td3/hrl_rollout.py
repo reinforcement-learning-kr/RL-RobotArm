@@ -128,10 +128,14 @@ class RolloutWorker:
                 if self.compute_Q:
                     # u, Q = policy_output
                     u = policy_output
-                    Q = self.policy.Get_Q_value(o[i], high_goal_gt[i], u[0])
+                    print(" self.compute_Q u : ", u)
+                    #print(" self.compute_Q u[0] : ", u[0])
+                    Q = self.policy.Get_Q_value(o[i], high_goal_gt[i], u)
                     Qs.append(Q)
                 else:
                     u = policy_output
+                    print(" self.compute_Q else u : ", u)
+                    #print(" self.compute_Q else u[0] : ", u[0])
                 #####################################################################################
 
                 if u.ndim == 1:
@@ -144,7 +148,7 @@ class RolloutWorker:
                     # curr_o_new, _, _, info = self.envs[i].step(u[i])
                     ##################################### hrl ###############################
                     #curr_o_new, reward, done, info = self.envs[i].step(u[i])  # jangikim
-                    curr_o_new, reward, done, info = self.envs[i].step(u[0])  # jangikim
+                    curr_o_new, reward, done, info = self.envs[i].step(u.reshape(4,))  # jangikim
                     #########################################################################
                     if 'is_success' in info:
                         success[i] = info['is_success']
@@ -166,12 +170,12 @@ class RolloutWorker:
                     print("done_new[{0}] : ".format(i), done_new[i])
 
                 Rt_high_sum[i] += reward_new[i]
-                u_temp[i] = u[0]
+                u_temp[i] = u
                 #low_nn_at[i][high_level_count-1] = u.copy()
                 if i == 0:
-                    low_nn_at_0[t % self.high_level_train_step] = u[0]
+                    low_nn_at_0[t % self.high_level_train_step] = u
                 else:
-                    low_nn_at_1[t % self.high_level_train_step] = u[0]
+                    low_nn_at_1[t % self.high_level_train_step] = u
 
                 if total_timestep % self.high_level_train_step == 0:
                     high_goal_gt[i] = self.policy.get_high_goal_gt(o[i], ag[i], self.g[i],
@@ -181,21 +185,23 @@ class RolloutWorker:
                                                                    use_target_net=self.use_target_net)
                     #low_nn_ati = np.array(low_nn_at[i], dtype=object).reshape(self.high_level_train_step, self.dims['u'])
 
-                    print("high_old_obj_st[i] ", high_old_obj_st[i])
-                    print("ag[i] ", ag[i])
-                    print("self.g[i] ", self.g[i])
-                    print("o_new[i] ", o_new[i])
+                    #print("high_old_obj_st[i] ", high_old_obj_st[i])
+                    #print("ag[i] ", ag[i])
+                    #print("self.g[i] ", self.g[i])
+                    #print("o_new[i] ", o_new[i])
 
                     if i == 0:
-                        print("low_nn_at_0 ", low_nn_at_0)
+                        #print("low_nn_at_0 ", low_nn_at_0)
                         high_goal_gt_tilda[i] = self.policy.get_high_goal_gt_tilda(high_old_obj_st[i], ag[i], self.g[i],
                                                                                o_new[i],
-                                                                               low_nn_at_0[0])
+                                                                               low_nn_at_0)
+                        #print("high_goal_gt_tilda[i] : ", high_goal_gt_tilda[i])
                     else:
-                        print("low_nn_at_1 ", low_nn_at_1)
+                        #print("low_nn_at_1 ", low_nn_at_1)
                         high_goal_gt_tilda[i] = self.policy.get_high_goal_gt_tilda(high_old_obj_st[i], ag[i], self.g[i],
                                                                                o_new[i],
-                                                                               low_nn_at_1[0])
+                                                                               low_nn_at_1)
+                        #print("high_goal_gt_tilda[i] : ", high_goal_gt_tilda[i])
                     self.policy.update_meta_controller(o[i], ag[i], self.g[i], o_new[i],
                                                        np.array(high_goal_gt_tilda[i]), Rt_high_sum[i],
                                                        done_new[i],
@@ -225,7 +231,7 @@ class RolloutWorker:
                 '''
                 intrinsic_reward[i] = -LA.norm(o + high_goal_gt - o_new)
 
-                self.policy.update_controller(o[i], o_new[i], high_goal_gt[i], u[0], intrinsic_reward[i],
+                self.policy.update_controller(o[i], o_new[i], high_goal_gt[i], u, intrinsic_reward[i],
                                               done_new[i],
                                               total_timestep)
                 ########################################################################################################

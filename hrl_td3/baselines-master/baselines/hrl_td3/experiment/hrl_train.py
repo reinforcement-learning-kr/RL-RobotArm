@@ -45,6 +45,7 @@ def train(policy, rollout_worker, evaluator,
         print("===== train start ===== ")
         rollout_worker.clear_history()
         #for _ in range(n_cycles):
+
         for itrain in range(n_cycles):
             print("itrain : ", itrain + 1)
             episode = rollout_worker.generate_rollouts()
