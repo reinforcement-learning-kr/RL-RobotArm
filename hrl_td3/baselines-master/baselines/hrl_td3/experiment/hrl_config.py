@@ -28,6 +28,7 @@ DEFAULT_PARAMS = {
     'polyak': 0.95,  # polyak averaging coefficient
     'action_l2': 1.0,  # quadratic penalty on actions (before rescaling by max_u)
     'clip_obs': 200.,
+    #'clip_obs': 20.,
     'scope': 'ddpg',  # can be tweaked for testing
     'relative_goals': False,
     # training

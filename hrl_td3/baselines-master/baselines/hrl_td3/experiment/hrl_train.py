@@ -67,6 +67,7 @@ def train(policy, rollout_worker, evaluator,
         print("===== test end ===== ")
 
 
+
         # record logs
         print("===== record logs start ===== ")
         logger.record_tabular('epoch', epoch)
@@ -175,7 +176,8 @@ def launch(
     }
 
     eval_params = {
-        'exploit': True,
+        #'exploit': True,
+        'exploit': False,
         'use_target_net': params['test_with_polyak'],
         'use_demo_states': False,
         'compute_Q': True,

@@ -206,6 +206,8 @@ class hrlTD3():
         self.low_replay_buffer = H_ReplayBuffer()
         self.high_replay_buffer = H_ReplayBuffer()
 
+        self.clip_obs2 = 5
+
     def initDemoBuffer(self, demoDataFile, update_stats=True): #function that initializes the demo buffer
 
         demoData = np.load(demoDataFile) #load the demonstration data from data file
@@ -365,6 +367,10 @@ class hrlTD3():
         #return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n[0], self.dimu))
         return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n[0]))
 
+    def _random_state(self, n):
+        #return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n, self.dimu))
+        #return np.random.uniform(low=-self.max_u, high=self.max_u, size=(n[0], self.dimu))
+        return np.random.uniform(low=-self.clip_obs2, high=self.clip_obs2, size=(n[0]))
 
     def _preprocess_og(self, o, ag, g):
 
@@ -380,7 +386,6 @@ class hrlTD3():
         return o, g
 
     def get_low_actions(self, o1, ag, hg1, noise_eps=0., random_eps=0., use_target_net=False,
-    #def get_low_actions(self, o, g, noise_eps=0., random_eps=0., use_target_net=False,
                     compute_Q=False):
 
         o, hg = self._preprocess_og(o1, ag, hg1)
@@ -402,19 +407,12 @@ class hrlTD3():
         '''
         #jangikim
         #joint_low_state_goal = np.concatenate([o, g], axis=None)
-        '''
-        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
-        t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(hg))
 
-        n_o  = t_o.eval()
-        n_high_goal_gt = t_high_goal_gt.eval()
-
-        joint_low_state_goal = np.concatenate([n_o, n_high_goal_gt], axis=None)
-        '''
         joint_low_state_goal = np.concatenate([o, hg], axis=None)
 
         #print("joint_low_state_goal : ", joint_low_state_goal)
 
+        #ret = self.controller.select_action(self.lo_stats, np.array(joint_low_state_goal))
         ret = self.controller.select_action(np.array(joint_low_state_goal))
 
         #print(" get_low_actions ret : ", ret)
@@ -454,67 +452,51 @@ class hrlTD3():
                           use_target_net=False, compute_Q=False):
         o, g = self._preprocess_og(o, ag, g) #for cliping o, g
 
-        '''
-        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
-        t_g = self.g_stats.normalize(tf.convert_to_tensor(g))
-
-        n_o  = t_o.eval()
-        n_g = t_g.eval()
-
-        joint_high_state = np.concatenate([n_o, n_g], axis=None)
-        '''
-
         joint_high_state = np.concatenate([o, g], axis=None)
+        #ret = self.meta_controller.select_action(self.uo_stats, joint_high_state)
         ret = self.meta_controller.select_action(joint_high_state)
 
         #ret = self.meta_controller.select_action(o)
 
         u = ret
 
+        #print("get_high_goal_gt : ", u)
         #print("get_high_goal_gt u : ", u)
 
         noise = noise_eps * self.max_u * np.random.randn(*u.shape)  # gaussian noise
+        #noise = noise_eps * self.clip_obs2 * np.random.randn(*u.shape)  # gaussian noise
+        #print("get_high_goal_gt noise : ", noise)
+
         u += noise
-        u = np.clip(u, -self.max_u, self.max_u)
+        #u = np.clip(u, -self.max_u, self.max_u)
+        u = np.clip(u, -self.clip_obs, self.clip_obs)
+
         #u += np.random.binomial(1, random_eps, u.shape[0]).reshape(-1, 1) * (self._random_action(u.shape[0]) - u)  # eps-greedy
         #u += np.random.binomial(1, random_eps, u.shape).reshape(-1, 1) * (self._random_action(u.shape) - u)  # eps-greedy
         u1 = np.random.binomial(1, random_eps, u.shape)
+
         u2 = (self._random_action(u.shape) - u)
+        #u2 = (self._random_state(u.shape) - u)
+
+        #print("get_high_goal_gt u2 : ", u2)
+
         u3 = u1 * u2
         u += u3
 
-        #print("get_high_goal_gt final u : ", u)
+        ## print_point
+        #print("get_high_goal_gt final goal : ", u)
+
         return u
 
-    def get_high_goal_gt_tilda(self, o, ag, g, o_new, low_nn_at):
+    def get_high_goal_gt_tilda(self, o, ag, g, o_new, o_nn_st, low_nn_at):
         #print ("get_high_goal_gt_tilda low_nn_at : ", low_nn_at)
-        o, g = self._preprocess_og(o, ag, g) #for cliping o, g
+        o, g = self._preprocess_og(o, ag, g)  # for cliping o, g
+        for i in range(10):
+            o_nn_st[i], g = self._preprocess_og(o_nn_st[i], ag, g) #for cliping o, g
         o_new, g = self._preprocess_og(o_new, ag, g) #for cliping o_new
-        #policy = self.target if use_target_net else self.main
-        # values to compute
-        '''
-        vals = [policy.pi_tf]
-        if compute_Q:
-            vals += [policy.Q_pi_tf]
-        # feed
-        feed = {
-            policy.o_tf: o.reshape(-1, self.dimo),
-            policy.g_tf: g.reshape(-1, self.dimg),
-            policy.u_tf: np.zeros((o.size // self.dimo, self.dimu), dtype=np.float32)
-        }
-        ret = self.sess.run(vals, feed_dict=feed)
-        '''
-        #jangikim
-        '''
-        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
-        t_g = self.g_stats.normalize(tf.convert_to_tensor(g))
 
-        n_o  = t_o.eval()
-        n_g = t_g.eval()
-
-        joint_high_state = np.concatenate([n_o, n_g], axis=None)
-        '''
         joint_high_state = np.concatenate([o, g], axis=None)
+        #ret = self.meta_controller.select_action(self.uo_stats, joint_high_state)
         ret = self.meta_controller.select_action(joint_high_state)
 
         #ret = self.meta_controller.select_action(o)
@@ -524,30 +506,55 @@ class hrlTD3():
         #u = ret[0]
         #noise = noise_eps * self.max_u * (np.random.randn(*u.shape) + (o_new - old_st)) # gaussian noise
         mu = o_new - o
+        sigma = 0.1*0.5*self.clip_obs
         for x in range(8):
-            goals_candidate.append(np.random.randn(*ret.shape) + mu)
+            goals_candidate.append(np.clip(sigma*np.random.randn(*ret.shape) + mu, -self.clip_obs, self.clip_obs))
         goals_candidate.append(mu)
         goals_candidate.append(ret)
+
+        high_goal_gt_tilda_step = np.zeros((10*10, 10),
+                    np.float32).reshape(10, 10, 10)
+
+        i = 0
+        for gi_tilda in goals_candidate:
+            j = 0
+            high_goal_gt_tilda_step[i][j] = gi_tilda
+            for _ in o_nn_st:
+                high_goal_gt_tilda_step[i][j+1] = o_nn_st[j] + high_goal_gt_tilda_step[i][j] - o_nn_st[j + 1]
+                j += 1
+                if j == 9:
+                    break
+            i += 1
+
 
         #print("goals_candidate : ", goals_candidate)
         L2_norm_sum = 0
         log_low_policy = []
-        for gi_tilda in goals_candidate:
-            #joint_low_state_goal = np.concatenate([n_o, gi_tilda], axis=None)
-            joint_low_state_goal = np.concatenate([o, gi_tilda], axis=None)
-            low_ret = self.controller.select_action(np.array(joint_low_state_goal))
 
+        i = 0
+        for gi_tilda in goals_candidate:
+            j = 0
+            #joint_low_state_goal = np.concatenate([n_o, gi_tilda], axis=None)
+            #joint_low_state_goal = np.concatenate([o, gi_tilda], axis=None)
             for ai in low_nn_at:
+                joint_low_state_goal = np.concatenate([o_nn_st[j], high_goal_gt_tilda_step[i][j]], axis=None)
+                #low_ret = self.controller.select_action(self.lo_stats, np.array(joint_low_state_goal))
+                low_ret = self.controller.select_action(np.array(joint_low_state_goal))
+
                 L2_norm = LA.norm(ai - low_ret)
                 L2_norm_sum += L2_norm*L2_norm
+                j += 1
+            i += 1
 
             #print("-(L2_norm_sum / 2) : ", -(L2_norm_sum / 2))
             log_low_policy.append(-(L2_norm_sum / 2))
             L2_norm_sum = 0
 
+
         max_num = np.argmax(np.asarray(log_low_policy))
         #print("max_num : ", max_num)
-        print("goals_candidate[max_num] : ", goals_candidate[max_num])
+        ## print_point
+        #print("goals_candidate[max_num] : ", goals_candidate[max_num])
         return goals_candidate[max_num]
 
         #u += noise
@@ -565,67 +572,59 @@ class hrlTD3():
 
     def Get_Q_value(self, o, high_goal_gt, u):
         o, high_goal_gt = self._preprocess_og(o, high_goal_gt, high_goal_gt)  # for cliping o, high_goal_gt
-        '''
-        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
-        t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt))
 
-        n_o  = t_o.eval()
-        n_high_goal_gt = t_high_goal_gt.eval()
+        ## print_point
+        #print("Get_Q_value u : ", u)
 
-        joint_low_state = np.concatenate([n_o, n_high_goal_gt], axis=None)
-        '''
-        print("Get_Q_value u : ", u)
         #print ("Get_Q_value o : ", o)
         #print ("Get_Q_value high_goal_gt : ", high_goal_gt)
         joint_low_state = np.concatenate([o, high_goal_gt], axis=None)
         #print("Get_Q_value joint_low_state : ", joint_low_state)
+        #return self.controller.get_Q_value(self.lo_stats, np.array(joint_low_state), u)
         return self.controller.get_Q_value(np.array(joint_low_state), u)
 
     #def update_meta_controller(self, episode_timesteps, args, gamma=1.0):
-    def update_meta_controller(self, o, ag, g, o_new, high_goal_gt_tilda, r, d,  episode_timesteps):
+    #def update_meta_controller(self, o, ag, g, o_new, high_goal_gt_tilda, r, d,  episode_timesteps):
+    def update_meta_controller(self, g, r, d, low_nn_st, low_nn_at, episode_timesteps, ag):
+        obs, new_obs, us, rs, ds = [], [], [], [], []
 
-        o, g = self._preprocess_og(o, ag, g) #for cliping o, g
-        o_new, g = self._preprocess_og(o_new, ag, g) #for cliping o_new
+        self.high_replay_buffer.add((low_nn_st.copy(), low_nn_at.copy(), r.copy(), r.copy(), d.copy()))
 
-        '''
-        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
-        t_g = self.g_stats.normalize(tf.convert_to_tensor(g))
-        t_o_new = self.o_stats.normalize(tf.convert_to_tensor(o_new))
-        t_high_goal_gt_tilda = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt_tilda))
+        for it in range(episode_timesteps):
+            x, y, r, r, d = self.high_replay_buffer.sample(self.hrl_batch_size)
 
-        n_o = t_o.eval()
-        n_g = t_g.eval()
-        n_o_new = t_o_new.eval()
-        n_high_goal_gt_tilda = t_high_goal_gt_tilda.eval()
+            for i in range(self.hrl_batch_size):
+                high_goal_gt_tilda = self.get_high_goal_gt_tilda(x[i][0], ag, g,
+                                            x[i][9],x[i],y[i])
 
-        joint_high_state = np.concatenate([n_o, n_g], axis=None)
-        joint_high_state_new = np.concatenate([n_o_new, n_g], axis=None)
-        self.high_replay_buffer.add((joint_high_state, joint_high_state_new, n_high_goal_gt_tilda, r, d))        
-        '''
-        joint_high_state = np.concatenate([o, g], axis=None)
-        joint_high_state_new = np.concatenate([o_new, g], axis=None)
-        self.high_replay_buffer.add((joint_high_state, joint_high_state_new, high_goal_gt_tilda, r, d))
+                joint_high_state = np.concatenate([x[i][0], g], axis=None)
+                joint_high_state_new = np.concatenate([x[i][9], g], axis=None)
 
-        #self.high_replay_buffer.add((o, o_new, high_goal_gt_tilda, r, d))
-        #jangikim
-        self.meta_controller.train(self.high_replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
-                     self.noise_clip, self.policy_freq)
+                obs.append(joint_high_state.copy())
+                new_obs.append(joint_high_state_new.copy())
+                us.append(high_goal_gt_tilda.copy())
+                rs.append(r[i].copy())
+                ds.append(d[i].copy())
+
+            self.meta_controller.train2(np.array(obs),
+                                        np.array(new_obs),
+                                        np.array(us),
+                                        np.array(rs),
+                                        np.array(ds), it,
+                                           self.discount, self.tau, self.policy_noise,
+                                           self.noise_clip, policy_freq=2)
+
+            del obs[:]
+            del new_obs[:]
+            del us[:]
+            del rs[:]
+            del ds[:]
+
 
     #def update_controller(self, episode_timesteps, args, gamma=1.0):
     def update_controller(self, o, o_new, high_goal_gt, u, r, d, episode_timesteps):
         o, o_new = self._preprocess_og(o, o_new, o_new)  # for cliping o, o_new
-        '''
-        t_o = self.o_stats.normalize(tf.convert_to_tensor(o))
-        t_o_new = self.o_stats.normalize(tf.convert_to_tensor(o_new))
-        t_high_goal_gt = self.o_stats.normalize(tf.convert_to_tensor(high_goal_gt))
 
-        n_o = t_o.eval()
-        n_o_new = t_o_new.eval()
-        n_high_goal_gt = t_high_goal_gt.eval()
-
-        joint_low_state_goal_old = np.concatenate([n_o, n_high_goal_gt], axis=None)
-        joint_low_state_goal_new = np.concatenate([n_o_new, n_high_goal_gt], axis=None)
-        '''
         #print( " update_controller u : ", u)
         #print(" update_controller u[0] : ", u[0])
         joint_low_state_goal_old = np.concatenate([o, high_goal_gt], axis=None)
@@ -633,8 +632,10 @@ class hrlTD3():
         self.low_replay_buffer.add(
             (joint_low_state_goal_old.copy(), joint_low_state_goal_new.copy(), u[0], r, d))
 
+
+        #self.controller.train(self.lo_stats, self.low_replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
         self.controller.train(self.low_replay_buffer, episode_timesteps, self.hrl_batch_size, self.discount, self.tau, self.policy_noise,
-                     self.noise_clip, self.policy_freq)
+                     self.noise_clip, policy_freq=2)
 
     def store_episode(self, episode_batch, update_stats=True):
         """
@@ -695,7 +696,14 @@ class hrlTD3():
             if reuse:
                 vs.reuse_variables()
             self.g_stats = Normalizer(self.dimg, self.norm_eps, self.norm_clip, sess=self.sess)
-
+        with tf.variable_scope('uo_stats') as vs:
+            if reuse:
+                vs.reuse_variables()
+            self.uo_stats = Normalizer(self.dimo + self.dimg, self.norm_eps, self.norm_clip, sess=self.sess)
+        with tf.variable_scope('lo_stats') as vs:
+            if reuse:
+                vs.reuse_variables()
+            self.lo_stats = Normalizer(2 * self.dimo, self.norm_eps, self.norm_clip, sess=self.sess)
         '''
         # mini-batch sampling.
         batch = self.staging_tf.get()
