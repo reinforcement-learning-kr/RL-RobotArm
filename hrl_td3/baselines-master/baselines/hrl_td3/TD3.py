@@ -5,7 +5,7 @@ import tensorflow as tf
 from torch.autograd import Variable
 import torch.nn.functional as F
 #import utils
-from baselines.hrl_td3.hrl_util import H_ReplayBuffer
+from hrl_td3.baselines_master.baselines.hrl_td3.hrl_util import H_ReplayBuffer
 from sklearn import preprocessing
 from sklearn.preprocessing import StandardScaler
 
@@ -84,13 +84,21 @@ class TD3(object):
         self.critic = Critic(state_dim, action_dim).to(device)
         self.critic_target = Critic(state_dim, action_dim).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=0.001)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=0.003)
 
         self.max_action = max_action
 
         #jangikim
         self.default_clip_range = 5
         self.scaler = StandardScaler(with_mean=False, with_std =False)
+
+    def my_loss(self, q1, q2, target):
+        t1 = (q1 - target)/10e30
+        t2 = (q2 -target)/10e30
+        loss = t1 + t2
+        loss = torch.mean(loss)
+        # loss = -torch.mean((q1 - target) ** 2 + (q2 - target) ** 2)
+        return loss
 
     #def select_action(self, o_stats, state):
     def select_action(self, state):
@@ -158,7 +166,8 @@ class TD3(object):
             current_Q1, current_Q2 = self.critic(state, action)
 
             # Compute critic loss
-            critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+            #critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+            critic_loss = self.my_loss(current_Q1, current_Q2, target_Q)
 
             # Optimize the critic
             self.critic_optimizer.zero_grad()
@@ -208,7 +217,8 @@ class TD3(object):
         current_Q1, current_Q2 = self.critic(state, action)
 
         # Compute critic loss
-        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+        #critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+        critic_loss = self.my_loss(current_Q1, current_Q2, target_Q)
 
         # Optimize the critic
         self.critic_optimizer.zero_grad()
