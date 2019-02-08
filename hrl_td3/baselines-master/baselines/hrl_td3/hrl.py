@@ -7,14 +7,14 @@ from tensorflow.contrib.staging import StagingArea
 from baselines import logger
 #from baselines.her.util import (
 #    import_function, store_args, flatten_grads, transitions_in_episode_batch, convert_episode_to_batch_major)
-from baselines.hrl_td3.util import (
+from hrl_td3.baselines_master.baselines.hrl_td3.util import (
     import_function, store_args, flatten_grads, transitions_in_episode_batch, convert_episode_to_batch_major)
 #from baselines.her.normalizer import Normalizer
 #from baselines.her.replay_buffer import ReplayBuffer
-from baselines.hrl_td3.normalizer import Normalizer
-from baselines.hrl_td3.replay_buffer import ReplayBuffer
-from baselines.hrl_td3.hrl_util import H_ReplayBuffer
-from baselines.common.mpi_adam import MpiAdam
+from hrl_td3.baselines_master.baselines.hrl_td3.normalizer import Normalizer
+from hrl_td3.baselines_master.baselines.hrl_td3.replay_buffer import ReplayBuffer
+from hrl_td3.baselines_master.baselines.hrl_td3.hrl_util import H_ReplayBuffer
+from hrl_td3.baselines_master.baselines.common.mpi_adam import MpiAdam
 
 ########################### hrl ###########################
 #import numpy as np
@@ -26,7 +26,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd
 
-from baselines.hrl_td3.TD3 import TD3
+from hrl_td3.baselines_master.baselines.hrl_td3.TD3 import TD3
 #from td3 import TD3
 from numpy import linalg as LA
 #from utils.replay_memory import ReplayMemory, Transition
@@ -585,17 +585,22 @@ class hrlTD3():
 
     #def update_meta_controller(self, episode_timesteps, args, gamma=1.0):
     #def update_meta_controller(self, o, ag, g, o_new, high_goal_gt_tilda, r, d,  episode_timesteps):
-    def update_meta_controller(self, g, r, d, low_nn_st, low_nn_at, episode_timesteps, ag):
+    def save_meta_controller(self, g, r, d, low_nn_st, low_nn_at, episode_timesteps, ag):
         obs, new_obs, us, rs, ds = [], [], [], [], []
 
         self.high_replay_buffer.add((low_nn_st.copy(), low_nn_at.copy(), r.copy(), r.copy(), d.copy()))
 
+
+    def update_meta_controller(self, g, episode_timesteps, ag):
+
         for it in range(episode_timesteps):
-            x, y, r, r, d = self.high_replay_buffer.sample(self.hrl_batch_size)
+            x, y, u, r, d = self.high_replay_buffer.sample(self.hrl_batch_size)
 
             for i in range(self.hrl_batch_size):
+                obs, new_obs, us, rs, ds = [], [], [], [], []
+                
                 high_goal_gt_tilda = self.get_high_goal_gt_tilda(x[i][0], ag, g,
-                                            x[i][9],x[i],y[i])
+                                                                 x[i][9], x[i], y[i])
 
                 joint_high_state = np.concatenate([x[i][0], g], axis=None)
                 joint_high_state_new = np.concatenate([x[i][9], g], axis=None)
@@ -611,8 +616,8 @@ class hrlTD3():
                                         np.array(us),
                                         np.array(rs),
                                         np.array(ds), it,
-                                           self.discount, self.tau, self.policy_noise,
-                                           self.noise_clip, policy_freq=2)
+                                        self.discount, self.tau, self.policy_noise,
+                                        self.noise_clip, policy_freq=2)
 
             del obs[:]
             del new_obs[:]
