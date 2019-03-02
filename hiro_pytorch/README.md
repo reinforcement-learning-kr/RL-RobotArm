@@ -15,11 +15,11 @@ model-free 알고리즘인 [TD3](https://arxiv.org/abs/1802.09477)을 기반으�
 
 ### 필요 모듈 설치 명령어
 #### python2.7
-```$ pip install torch torch-vision gym```
+```$ pip install torch torch-vision gym```  
 ```$ pip install -U 'mujoco-py<1.50.2,>=1.50.1'```
 
 #### python3
-```$ pip3 install torch torch-vision gym```
+```$ pip3 install torch torch-vision gym```  
 ```$ pip3 install -U 'mujoco-py<1.50.2,>=1.50.1'```
 
 ### 실행방법
